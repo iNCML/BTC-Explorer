@@ -1,0 +1,966 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bitcoin Transaction Preimages Sign/Verify</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      }
+      body {
+        margin: 0;
+        background: #091126;
+        color: #e6edff;
+      }
+      main {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 20px 16px 48px;
+      }
+      h1 {
+        margin: 0 0 8px;
+      }
+      .note {
+        margin: 0 0 16px;
+        opacity: 0.85;
+      }
+      .panel {
+        background: #111d3c;
+        border: 1px solid #304373;
+        border-radius: 12px;
+        padding: 14px;
+        margin: 12px 0;
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+      }
+      button {
+        cursor: pointer;
+        border-radius: 8px;
+        border: 1px solid #3e66c9;
+        background: #2f57be;
+        color: #fff;
+        font-weight: 600;
+        padding: 8px 12px;
+      }
+      button:hover {
+        background: #3d66d3;
+      }
+      .kv {
+        margin-top: 10px;
+        display: grid;
+        grid-template-columns: 220px 1fr;
+        gap: 8px;
+      }
+      .k {
+        opacity: 0.9;
+        font-weight: 600;
+      }
+      .k-note {
+        margin-top: 4px;
+        font-weight: 400;
+        font-size: 0.88rem;
+        line-height: 1.35;
+        opacity: 0.85;
+      }
+      .v {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        word-break: break-all;
+        background: #0a1530;
+        border: 1px solid #2a3b66;
+        border-radius: 8px;
+        padding: 8px;
+      }
+      .steps details {
+        border: 1px solid #2a3b66;
+        border-radius: 8px;
+        padding: 8px;
+        margin: 8px 0;
+        background: #0a1530;
+      }
+      .steps summary {
+        cursor: pointer;
+        font-weight: 600;
+      }
+      .steps pre {
+        margin: 8px 0 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+      .step-links {
+        display: inline-flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .step-links button {
+        background: transparent;
+        border: 1px solid #4a5f90;
+        color: #c8d7ff;
+        font-weight: 600;
+        padding: 6px 10px;
+      }
+      .step-links button:hover {
+        background: #1f2f56;
+      }
+      .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.6);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+        z-index: 9999;
+      }
+      .modal {
+        width: min(980px, 100%);
+        max-height: 85vh;
+        overflow: auto;
+        border-radius: 12px;
+        background: #101b39;
+        border: 1px solid #3d5491;
+        padding: 12px;
+      }
+      .modal-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+      .modal pre {
+        margin: 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+        background: #0a1530;
+        border: 1px solid #2a3b66;
+        border-radius: 8px;
+        padding: 10px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+      .ok {
+        color: #73f2a3;
+        font-weight: 700;
+      }
+      .bad {
+        color: #ff9d9d;
+        font-weight: 700;
+      }
+      @media (max-width: 760px) {
+        .kv {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main id="app"></main>
+    <div id="root" style="display: none"></div>
+    <script src="./assets/index-DhpRvcfP.js"></script>
+    <script>
+      (() => {
+        const app = document.getElementById("app");
+        const SIGHASH_ALL = 0x01;
+        const VERSION = 2;
+        const LOCKTIME = 0;
+        const SEQUENCE_FINAL = 0xffffffff;
+        const CURVE_N = BigInt("0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141");
+        const HRP = "bc";
+        const BECH32_CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+
+        const state = {
+          key: null,
+          tx: null,
+          sign: null,
+          verify: null,
+          modal: null,
+          error: ""
+        };
+
+        function ensureBundlePrimitives() {
+          if (typeof Kv !== "function") throw new Error("Missing crypto primitive from bundle: Kv");
+          if (typeof bd !== "function") throw new Error("Missing crypto primitive from bundle: bd");
+          if (typeof Nl !== "function") throw new Error("Missing crypto primitive from bundle: Nl");
+          if (typeof Wt !== "function") throw new Error("Missing crypto primitive from bundle: Wt");
+          if (typeof ya !== "function") throw new Error("Missing crypto primitive from bundle: ya");
+          if (typeof pv !== "function") throw new Error("Missing crypto primitive from bundle: pv");
+          if (typeof Av !== "function") throw new Error("Missing crypto primitive from bundle: Av");
+          if (typeof Vv !== "function") throw new Error("Missing crypto primitive from bundle: Vv");
+        }
+
+        function concatBytes(...chunks) {
+          const len = chunks.reduce((a, b) => a + b.length, 0);
+          const out = new Uint8Array(len);
+          let offset = 0;
+          for (const c of chunks) {
+            out.set(c, offset);
+            offset += c.length;
+          }
+          return out;
+        }
+
+        function u32le(n) {
+          const out = new Uint8Array(4);
+          new DataView(out.buffer).setUint32(0, n >>> 0, true);
+          return out;
+        }
+
+        function u64le(v) {
+          let n = BigInt(v);
+          const out = new Uint8Array(8);
+          for (let i = 0; i < 8; i += 1) {
+            out[i] = Number(n & 0xffn);
+            n >>= 8n;
+          }
+          return out;
+        }
+
+        function reverseBytes(b) {
+          return Uint8Array.from(Array.from(b).reverse());
+        }
+
+        function sha256(b) {
+          return ya(b);
+        }
+
+        function dsha256(b) {
+          return sha256(sha256(b));
+        }
+
+        function hexToBytes(hex) {
+          return Nl(hex);
+        }
+
+        function bytesToHex(bytes) {
+          return Wt(bytes);
+        }
+
+        function varInt(n) {
+          if (!Number.isInteger(n) || n < 0) throw new Error("Invalid varint value");
+          if (n < 0xfd) return Uint8Array.of(n);
+          if (n <= 0xffff) {
+            const out = new Uint8Array(3);
+            out[0] = 0xfd;
+            new DataView(out.buffer).setUint16(1, n, true);
+            return out;
+          }
+          throw new Error("Only small varints are needed for this lab");
+        }
+
+        function bytesToBigInt(bytes) {
+          let n = 0n;
+          for (const b of bytes) n = (n << 8n) + BigInt(b);
+          return n;
+        }
+
+        function mod(a, m) {
+          const r = a % m;
+          return r >= 0n ? r : r + m;
+        }
+
+        function modInv(a, m) {
+          let t = 0n;
+          let newT = 1n;
+          let r = m;
+          let newR = mod(a, m);
+          while (newR !== 0n) {
+            const q = r / newR;
+            [t, newT] = [newT, t - q * newT];
+            [r, newR] = [newR, r - q * newR];
+          }
+          if (r !== 1n) throw new Error("Inverse does not exist");
+          return mod(t, m);
+        }
+
+        function hex64(bi) {
+          return bi.toString(16).padStart(64, "0");
+        }
+
+        function escapeHtml(text) {
+          return String(text)
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;");
+        }
+
+        function randomInt(min, max) {
+          return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+
+        function btcFmt(sats) {
+          return (Number(sats) / 100000000).toFixed(8);
+        }
+
+        const POPUP_TEXT = {
+          algorithm: `ECDSA (Bitcoin SegWit v0) Signing Flow
+
+UTXO data + outputs
+   |
+   |  build BIP143 fields
+   v
+hashPrevouts  = dSHA256(all outpoints)
+hashSequence  = dSHA256(all nSequence)
+hashOutputs   = dSHA256(all tx outputs)
+scriptCode    = serialized witnessScript
+preimage      = nVersion || hashPrevouts || hashSequence || outpoint ||
+                scriptCode || amount || nSequence || hashOutputs ||
+                nLockTime || sighashType(01000000)
+sighash       = dSHA256(preimage)
+   |
+   |  ECDSA over secp256k1 with private key d
+   v
+deterministic nonce k (RFC6979)
+R = k*G, r = R.x mod n
+s = k^-1 (z + r*d) mod n
+low-S normalize
+DER encode (r,s), append sighash byte 01
+Place into witness stack
+Finalize tx bytes (with marker+flag 00 01)`,
+          python: `# pip install ecdsa
+import hashlib
+from ecdsa import SigningKey, SECP256k1, util
+
+SIGHASH_ALL = 0x01
+
+def dsha256(b: bytes) -> bytes:
+    return hashlib.sha256(hashlib.sha256(b).digest()).digest()
+
+def sign_tx_preimage(preimage_hex: str, priv_hex: str):
+    preimage = bytes.fromhex(preimage_hex)
+    z = dsha256(preimage)  # BIP143 digest
+
+    sk = SigningKey.from_string(bytes.fromhex(priv_hex), curve=SECP256k1)
+    sig_compact = sk.sign_digest_deterministic(
+        z,
+        hashfunc=hashlib.sha256,
+        sigencode=util.sigencode_string_canonize,
+    )  # 64-byte r||s low-S
+    r = int.from_bytes(sig_compact[:32], "big")
+    s = int.from_bytes(sig_compact[32:], "big")
+    sig_der = util.sigencode_der(r, s, sk.privkey.order)
+    sig_with_hashtype = sig_der + bytes([SIGHASH_ALL])
+    return z.hex(), sig_compact.hex(), sig_der.hex(), sig_with_hashtype.hex()`,
+          code: `Bitcoin Core signing path (SegWit v0, ECDSA)
+
+Files:
+- src/script/interpreter.cpp
+- src/script/sign.cpp
+- src/key.cpp
+
+Representative flow:
+
+const uint256 hash = SignatureHash(
+    scriptCode,
+    mtx_to,
+    nIn,
+    SIGHASH_ALL,
+    amount,
+    SigVersion::WITNESS_V0,
+    &txdata
+);
+
+std::vector<unsigned char> sig;
+if (!key.Sign(hash, sig)) return false;   // ECDSA sign over hash
+sig.push_back((unsigned char)SIGHASH_ALL); // append hash type
+
+// witness for P2WSH single-sig: [signature] [witnessScript]
+txin.scriptWitness.stack = {sig, witness_script};
+
+Verification path:
+- recompute SignatureHash(...)
+- CheckECDSASignature(sig, pubkey, hash, checker)
+`,
+          verify_algorithm: `ECDSA Verification Flow (Bitcoin SegWit v0)
+
+Input:
+- signature (r,s)
+- public key Q
+- BIP143 preimage fields
+
+Steps:
+1) Rebuild the exact BIP143 preimage for this input
+2) Compute z = dSHA256(preimage)
+3) Parse r,s and check 1 <= r,s < n
+4) Compute w = s^-1 mod n
+5) Compute u1 = z*w mod n, u2 = r*w mod n
+6) Compute P = u1*G + u2*Q
+7) Valid iff (P.x mod n) == r
+8) Bitcoin Core also enforces DER and sighash-type rules`,
+          verify_python: `# pip install ecdsa
+import hashlib
+from ecdsa import VerifyingKey, SECP256k1, util
+
+def dsha256(b: bytes) -> bytes:
+    return hashlib.sha256(hashlib.sha256(b).digest()).digest()
+
+def verify_tx_preimage(preimage_hex: str, pub_hex: str, sig_compact_hex: str) -> bool:
+    z = dsha256(bytes.fromhex(preimage_hex))
+    vk = VerifyingKey.from_string(bytes.fromhex(pub_hex), curve=SECP256k1)
+    sig = bytes.fromhex(sig_compact_hex)  # 64-byte r||s
+    return vk.verify_digest(sig, z, sigdecode=util.sigdecode_string)`,
+          verify_code: `Bitcoin Core verification path (SegWit v0, ECDSA)
+
+Files:
+- src/script/interpreter.cpp
+- src/script/sigcache.cpp
+- src/pubkey.cpp
+
+Representative flow:
+
+const uint256 sighash = SignatureHash(
+    scriptCode,
+    tx_to,
+    nIn,
+    nHashType,
+    amount,
+    SigVersion::WITNESS_V0,
+    &txdata
+);
+
+if (!CheckECDSASignature(vchSig, pubkey, sighash, checker)) {
+    return set_error(..., SCRIPT_ERR_ECDSA_VERIFY);
+}
+
+// Interpreter verifies witness stack against recomputed sighash.`
+        };
+
+        function createSingleSigWitnessScript(pubKey33) {
+          return concatBytes(Uint8Array.of(0x21), pubKey33, Uint8Array.of(0xac));
+        }
+
+        function segwitScriptPubKey(version, program) {
+          if (version < 0 || version > 16) throw new Error("Invalid witness version");
+          const ver = version === 0 ? 0x00 : 0x50 + version;
+          return concatBytes(Uint8Array.of(ver, program.length), program);
+        }
+
+        function bech32HrpExpand(hrp) {
+          const out = [];
+          for (let i = 0; i < hrp.length; i += 1) out.push(hrp.charCodeAt(i) >> 5);
+          out.push(0);
+          for (let i = 0; i < hrp.length; i += 1) out.push(hrp.charCodeAt(i) & 31);
+          return out;
+        }
+
+        function bech32Polymod(values) {
+          const GEN = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
+          let chk = 1;
+          for (const v of values) {
+            const top = chk >> 25;
+            chk = ((chk & 0x1ffffff) << 5) ^ v;
+            for (let i = 0; i < 5; i += 1) {
+              if ((top >> i) & 1) chk ^= GEN[i];
+            }
+          }
+          return chk >>> 0;
+        }
+
+        function bech32CreateChecksum(hrp, data) {
+          const values = bech32HrpExpand(hrp).concat(data, [0, 0, 0, 0, 0, 0]);
+          const mod = bech32Polymod(values) ^ 1;
+          const ret = [];
+          for (let i = 0; i < 6; i += 1) ret.push((mod >> (5 * (5 - i))) & 31);
+          return ret;
+        }
+
+        function bech32Encode(hrp, data) {
+          const combined = data.concat(bech32CreateChecksum(hrp, data));
+          let out = hrp + "1";
+          for (const d of combined) out += BECH32_CHARSET[d];
+          return out;
+        }
+
+        function convertBits(data, from, to, pad) {
+          let acc = 0;
+          let bits = 0;
+          const ret = [];
+          const maxv = (1 << to) - 1;
+          for (const value of data) {
+            if (value < 0 || value >> from) throw new Error("Invalid convertBits input");
+            acc = (acc << from) | value;
+            bits += from;
+            while (bits >= to) {
+              bits -= to;
+              ret.push((acc >> bits) & maxv);
+            }
+          }
+          if (pad) {
+            if (bits > 0) ret.push((acc << (to - bits)) & maxv);
+          } else if (bits >= from || ((acc << (to - bits)) & maxv)) {
+            throw new Error("Invalid convertBits padding");
+          }
+          return ret;
+        }
+
+        function segwitAddress(version, program) {
+          if (version !== 0) throw new Error("This lab uses segwit v0 only");
+          const words = [version].concat(convertBits(Array.from(program), 8, 5, true));
+          return bech32Encode(HRP, words);
+        }
+
+        function makeP2WSHFromPrivHex(privHex) {
+          const pubHex = bd(privHex);
+          const pubKey = hexToBytes(pubHex);
+          const witnessScript = createSingleSigWitnessScript(pubKey);
+          const witnessProgram = sha256(witnessScript);
+          const address = segwitAddress(0, witnessProgram);
+          return { privHex, pubHex, pubKey, witnessScript, witnessProgram, address };
+        }
+
+        function buildTransactionContext(source) {
+          const recipient1 = makeP2WSHFromPrivHex(Kv());
+          const recipient2 = makeP2WSHFromPrivHex(Kv());
+
+          const inputValue = randomInt(300000, 2500000);
+          const fee = randomInt(500, 2500);
+          const spendable = inputValue - fee;
+          const split = 0.35 + Math.random() * 0.3;
+          const out1Value = Math.floor(spendable * split);
+          const out2Value = spendable - out1Value;
+          if (out1Value < 1000 || out2Value < 1000) {
+            throw new Error("Randomized outputs became dust, regenerate");
+          }
+
+          const txid = new Uint8Array(32);
+          crypto.getRandomValues(txid);
+          const prevTxidHex = bytesToHex(txid);
+          const prevVout = randomInt(0, 2);
+
+          const outputs = [
+            {
+              address: recipient1.address,
+              value: BigInt(out1Value),
+              scriptPubKey: segwitScriptPubKey(0, recipient1.witnessProgram)
+            },
+            {
+              address: recipient2.address,
+              value: BigInt(out2Value),
+              scriptPubKey: segwitScriptPubKey(0, recipient2.witnessProgram)
+            }
+          ];
+
+          return {
+            source,
+            recipients: [recipient1, recipient2],
+            input: {
+              prevTxid: txid,
+              prevTxidHex,
+              prevVout,
+              sequence: SEQUENCE_FINAL,
+              value: BigInt(inputValue),
+              witnessScript: source.witnessScript
+            },
+            outputs,
+            fee: BigInt(fee)
+          };
+        }
+
+        function serializeOutput(o) {
+          return concatBytes(u64le(o.value), varInt(o.scriptPubKey.length), o.scriptPubKey);
+        }
+
+        function buildBip143Preimage(tx) {
+          const outpoint = concatBytes(reverseBytes(tx.input.prevTxid), u32le(tx.input.prevVout));
+          const hashPrevouts = dsha256(outpoint);
+          const hashSequence = dsha256(u32le(tx.input.sequence));
+
+          const outputsSerialized = tx.outputs.map(serializeOutput);
+          const hashOutputs = dsha256(concatBytes(...outputsSerialized));
+
+          const scriptCode = concatBytes(varInt(tx.input.witnessScript.length), tx.input.witnessScript);
+          const preimage = concatBytes(
+            u32le(VERSION),
+            hashPrevouts,
+            hashSequence,
+            outpoint,
+            scriptCode,
+            u64le(tx.input.value),
+            u32le(tx.input.sequence),
+            hashOutputs,
+            u32le(LOCKTIME),
+            u32le(SIGHASH_ALL)
+          );
+          const sighash = dsha256(preimage);
+          return { preimage, sighash, outpoint, scriptCode, outputsSerialized };
+        }
+
+        function serializeUnsignedNoWitness(tx, outputsSerialized, outpoint) {
+          const txIn = concatBytes(outpoint, Uint8Array.of(0x00), u32le(tx.input.sequence));
+          return concatBytes(
+            u32le(VERSION),
+            varInt(1),
+            txIn,
+            varInt(outputsSerialized.length),
+            ...outputsSerialized,
+            u32le(LOCKTIME)
+          );
+        }
+
+        function signTxPreimage(tx) {
+          const prepared = buildBip143Preimage(tx);
+          const priv = hexToBytes(tx.source.privHex);
+          const compactSig = pv(prepared.sighash, priv, { format: "compact", lowS: true, prehash: false });
+          const r = bytesToBigInt(compactSig.slice(0, 32));
+          const s = bytesToBigInt(compactSig.slice(32));
+          const z = bytesToBigInt(prepared.sighash);
+          const derSigHex = Vv(r, s);
+          const derSig = hexToBytes(derSigHex);
+          const sigWithHashType = concatBytes(derSig, Uint8Array.of(SIGHASH_ALL));
+          const witness = concatBytes(
+            varInt(2),
+            varInt(sigWithHashType.length),
+            sigWithHashType,
+            varInt(tx.input.witnessScript.length),
+            tx.input.witnessScript
+          );
+
+          const unsignedNoWitness = serializeUnsignedNoWitness(tx, prepared.outputsSerialized, prepared.outpoint);
+          const txIn = concatBytes(prepared.outpoint, Uint8Array.of(0x00), u32le(tx.input.sequence));
+          const signedTx = concatBytes(
+            u32le(VERSION),
+            Uint8Array.of(0x00, 0x01),
+            varInt(1),
+            txIn,
+            varInt(prepared.outputsSerialized.length),
+            ...prepared.outputsSerialized,
+            witness,
+            u32le(LOCKTIME)
+          );
+          const txid = reverseBytes(dsha256(unsignedNoWitness));
+          const wtxid = reverseBytes(dsha256(signedTx));
+          const signSteps = {
+            "1. Outpoint serialization":
+              "How: outpoint = little-endian prevTxid (32B) || little-endian vout (4B).\nValue: " +
+              bytesToHex(prepared.outpoint),
+            "2. hashPrevouts = dSHA256(outpoint list)":
+              "How: double-SHA256 of concatenated outpoints for all inputs (one input here).\nValue: " +
+              bytesToHex(dsha256(prepared.outpoint)),
+            "3. hashSequence = dSHA256(sequence list)":
+              "How: double-SHA256 of all input sequence fields in little-endian.\nValue: " +
+              bytesToHex(dsha256(u32le(tx.input.sequence))),
+            "4. hashOutputs = dSHA256(all outputs)":
+              "How: double-SHA256 of concatenated serialized outputs (value + scriptPubKey).\nValue: " +
+              bytesToHex(dsha256(concatBytes(...prepared.outputsSerialized))),
+            "5. scriptCode (varint + witnessScript)":
+              "How: varint(len(witnessScript)) followed by witnessScript bytes for P2WSH signing.\nValue: " +
+              bytesToHex(prepared.scriptCode),
+            "6. BIP143 preimage":
+              "How: nVersion || hashPrevouts || hashSequence || outpoint || scriptCode || amount || nSequence || hashOutputs || nLockTime || sighashType.\nValue: " +
+              bytesToHex(prepared.preimage),
+            "7. z = dSHA256(preimage)": "0x" + z.toString(16),
+            "8. ECDSA sign z with private key d": `r=0x${hex64(r)}\ns=0x${hex64(s)}\nlow-S=${s <= CURVE_N / 2n}`,
+            "9. DER encode and append sighash type":
+              "ASN.1 DER encodes (r,s) as INTEGERs in a SEQUENCE, then append 0x01 for SIGHASH_ALL.\nValue: " +
+              `${derSigHex}01`,
+            "10. Witness stack [sig+01, witnessScript]":
+              "Witness is serialized as stack-item count (0x02), then varint-len(sig+01)||sig+01, then varint-len(witnessScript)||witnessScript.\nValue: " +
+              bytesToHex(witness),
+            "11. Final transaction bytes":
+              "version || marker+flag(0001) || vin_count || txin(outpoint+empty scriptSig+sequence) || vout_count || outputs || witness || locktime.\nValue: " +
+              bytesToHex(signedTx),
+            "12. txid / wtxid":
+              "txid = reverse(dSHA256(unsigned_tx_without_witness)); wtxid = reverse(dSHA256(full_segwit_tx_with_witness)).\nValue: " +
+              `txid=${bytesToHex(txid)}\nwtxid=${bytesToHex(wtxid)}`
+          };
+
+          return {
+            ...prepared,
+            compactSig,
+            r,
+            s,
+            z,
+            derSigHex,
+            sigWithHashType,
+            witness,
+            unsignedNoWitness,
+            signedTx,
+            txid,
+            wtxid,
+            signSteps
+          };
+        }
+
+        function verifySig(signData, source) {
+          const r = signData.r;
+          const s = signData.s;
+          const z = signData.z;
+          const rangeOk = r > 0n && r < CURVE_N && s > 0n && s < CURVE_N;
+          const w = modInv(s, CURVE_N);
+          const u1 = mod(z * w, CURVE_N);
+          const u2 = mod(r * w, CURVE_N);
+
+          let pointCheck = "Point math unavailable in this runtime";
+          let xMatch = null;
+          try {
+            if (typeof Gt !== "undefined" && Gt && typeof Gt.fromHex === "function" && Gt.BASE) {
+              const Q = Gt.fromHex(source.pubHex);
+              const P = Gt.BASE.multiply(u1).add(Q.multiply(u2)).toAffine();
+              const xModN = mod(P.x, CURVE_N);
+              xMatch = xModN === r;
+              pointCheck = `Px mod n = 0x${xModN.toString(16)}\nexpected r = 0x${r.toString(16)}\nmatch = ${xMatch}`;
+            }
+          } catch (err) {
+            pointCheck = "Point math step error: " + (err && err.message ? err.message : String(err));
+          }
+
+          const libOk = Av(signData.compactSig, signData.sighash, source.pubKey, {
+            lowS: true,
+            format: "compact",
+            prehash: false
+          });
+          const ok = xMatch === null ? libOk : libOk && xMatch;
+          const verifySteps = {
+            "1. Parse signature (r,s) and range-check": `r=0x${hex64(r)}\ns=0x${hex64(s)}\nrange_ok=${rangeOk}`,
+            "2. Recompute z = dSHA256(BIP143 preimage)": "0x" + z.toString(16),
+            "3. Compute w = s^-1 mod n": "0x" + w.toString(16),
+            "4. Compute u1 = z*w mod n": "0x" + u1.toString(16),
+            "5. Compute u2 = r*w mod n": "0x" + u2.toString(16),
+            "6. Point equation P = u1*G + u2*Q": pointCheck,
+            "7. Library verify(check against z and pubkey)": String(libOk),
+            "8. Final verification result": String(ok)
+          };
+          return { ok, verifySteps };
+        }
+
+        function stepHtml(k, v, note = "") {
+          return `<div class="k">${escapeHtml(k)}${
+            note ? `<div class="k-note">${escapeHtml(note)}</div>` : ""
+          }</div><div class="v">${v}</div>`;
+        }
+
+        function stepsHtml(steps) {
+          if (!steps) return "";
+          const blocks = Object.entries(steps)
+            .map(([k, v]) => `<details open><summary>${escapeHtml(k)}</summary><pre>${escapeHtml(v)}</pre></details>`)
+            .join("");
+          return `<div class="steps">${blocks}</div>`;
+        }
+
+        function showModal(kind) {
+          const titleMap = {
+            algorithm: "Algorithm - BTC SegWit ECDSA Signing",
+            python: "Python - Signing Implementation",
+            code: "Bitcoin Core - Signing Code Path",
+            verify_algorithm: "Algorithm - BTC SegWit ECDSA Verification",
+            verify_python: "Python - Verification Implementation",
+            verify_code: "Bitcoin Core - Verification Code Path"
+          };
+          state.modal = { title: titleMap[kind], content: POPUP_TEXT[kind] };
+          render();
+        }
+
+        function render() {
+          if (state.error) {
+            app.innerHTML = `<h1>BTC Signature Lab</h1><p class="bad">${state.error}</p>`;
+            return;
+          }
+
+          const key = state.key;
+          const tx = state.tx;
+          const sign = state.sign;
+          const verify = state.verify;
+
+          app.innerHTML = `
+            <h1>Bitcoin Transaction Preimages Sign/Verify</h1>
+            <p class="note">This page signs a real SegWit v0 transaction preimage (BIP143, SIGHASH_ALL) in Bitcoin Core format.</p>
+
+            <section class="panel">
+              <h2>1) Key + SegWit Address</h2>
+              <div class="row">
+                <button id="btn-key">Generate Keypair + Source Address</button>
+              </div>
+              <div class="kv">
+                ${key ? stepHtml("Private key (hex)", key.privHex) : ""}
+                ${key ? stepHtml("Public key (compressed)", key.pubHex) : ""}
+                ${key ? stepHtml("Source address (P2WSH, bc1...)", key.address) : ""}
+                ${
+                  key
+                    ? stepHtml(
+                        "Witness script",
+                        bytesToHex(key.witnessScript),
+                        "Built as OP_PUSH33 <compressed pubkey> OP_CHECKSIG, where the compressed pubkey is derived from the generated private key."
+                      )
+                    : ""
+                }
+                ${
+                  key
+                    ? stepHtml(
+                        "Witness program (SHA256(script))",
+                        bytesToHex(key.witnessProgram),
+                        "Computed as SHA256(witnessScript). For SegWit v0 P2WSH, this 32-byte hash is inserted into scriptPubKey (0x00 0x20 <hash>) and bech32-encoded into the bc1 address."
+                      )
+                    : ""
+                }
+              </div>
+            </section>
+
+            <section class="panel">
+              <h2>2) Build Realistic Spend Transaction</h2>
+              <div class="row">
+                <button id="btn-tx" ${key ? "" : "disabled"}>Generate 1-in/2-out Transaction</button>
+              </div>
+              <div class="kv">
+                ${tx ? stepHtml("Previous txid", tx.input.prevTxidHex) : ""}
+                ${tx ? stepHtml("Previous vout", String(tx.input.prevVout)) : ""}
+                ${tx ? stepHtml("Input amount (sat)", tx.input.value.toString()) : ""}
+                ${tx ? stepHtml("Input amount (BTC)", btcFmt(tx.input.value)) : ""}
+                ${tx ? stepHtml("Recipient #1", tx.outputs[0].address) : ""}
+                ${tx ? stepHtml("Recipient #1 amount (sat)", tx.outputs[0].value.toString()) : ""}
+                ${tx ? stepHtml("Recipient #2", tx.outputs[1].address) : ""}
+                ${tx ? stepHtml("Recipient #2 amount (sat)", tx.outputs[1].value.toString()) : ""}
+                ${tx ? stepHtml("Fee (sat)", tx.fee.toString()) : ""}
+                ${
+                  tx
+                    ? stepHtml(
+                        "Output #1 scriptPubKey",
+                        bytesToHex(tx.outputs[0].scriptPubKey),
+                        "Computed as SegWit v0 P2WSH locking script: OP_0 + PUSH32 + witnessProgram. Here witnessProgram is the 32-byte SHA256 hash of recipient #1 witness script."
+                      )
+                    : ""
+                }
+                ${
+                  tx
+                    ? stepHtml(
+                        "Output #2 scriptPubKey",
+                        bytesToHex(tx.outputs[1].scriptPubKey),
+                        "Computed the same way: OP_0 + PUSH32 + witnessProgram for recipient #2. This scriptPubKey commits to the 32-byte witness script hash used by that bc1 address."
+                      )
+                    : ""
+                }
+              </div>
+            </section>
+
+            <section class="panel">
+              <h2>3) Sign BIP143 Preimage</h2>
+              <div class="row">
+                <button id="btn-sign" ${tx ? "" : "disabled"}>Sign Preimage (ECDSA low-S)</button>
+                <div class="step-links">
+                  <button id="btn-sign-alg" ${tx ? "" : "disabled"}>algorithm</button>
+                  <button id="btn-sign-python" ${tx ? "" : "disabled"}>python</button>
+                  <button id="btn-sign-code" ${tx ? "" : "disabled"}>code</button>
+                </div>
+              </div>
+              ${sign ? `<h3>Signing Steps</h3>${stepsHtml(sign.signSteps)}` : ""}
+            </section>
+
+            <section class="panel">
+              <h2>4) Verify Signature</h2>
+              <div class="row">
+                <button id="btn-verify" ${sign ? "" : "disabled"}>Verify Against Sighash</button>
+                <div class="step-links">
+                  <button id="btn-verify-alg" ${sign ? "" : "disabled"}>algorithm</button>
+                  <button id="btn-verify-python" ${sign ? "" : "disabled"}>python</button>
+                  <button id="btn-verify-code" ${sign ? "" : "disabled"}>code</button>
+                </div>
+              </div>
+              ${
+                verify === null
+                  ? ""
+                  : `<p class="${verify.ok ? "ok" : "bad"}">${
+                      verify.ok
+                        ? "VALID: signature verifies for this tx preimage"
+                        : "INVALID: signature failed verification"
+                    }</p>`
+              }
+              ${verify ? `<h3>Verification Steps</h3>${stepsHtml(verify.verifySteps)}` : ""}
+            </section>
+            ${
+              state.modal
+                ? `<div class="modal-backdrop" id="modal-backdrop">
+                    <div class="modal">
+                      <div class="modal-head">
+                        <strong>${escapeHtml(state.modal.title)}</strong>
+                        <button id="btn-modal-close">Close</button>
+                      </div>
+                      <pre>${escapeHtml(state.modal.content)}</pre>
+                    </div>
+                  </div>`
+                : ""
+            }
+          `;
+
+          document.getElementById("btn-key").onclick = () => {
+            state.key = makeP2WSHFromPrivHex(Kv());
+            state.tx = null;
+            state.sign = null;
+            state.verify = null;
+            state.modal = null;
+            render();
+          };
+
+          const btnTx = document.getElementById("btn-tx");
+          if (btnTx) {
+            btnTx.onclick = () => {
+              state.tx = buildTransactionContext(state.key);
+              state.sign = null;
+              state.verify = null;
+              state.modal = null;
+              render();
+            };
+          }
+
+          const btnSign = document.getElementById("btn-sign");
+          if (btnSign) {
+            btnSign.onclick = () => {
+              state.sign = signTxPreimage(state.tx);
+              state.verify = null;
+              state.modal = null;
+              render();
+            };
+          }
+          const btnSignAlg = document.getElementById("btn-sign-alg");
+          if (btnSignAlg) btnSignAlg.onclick = () => showModal("algorithm");
+          const btnSignPython = document.getElementById("btn-sign-python");
+          if (btnSignPython) btnSignPython.onclick = () => showModal("python");
+          const btnSignCode = document.getElementById("btn-sign-code");
+          if (btnSignCode) btnSignCode.onclick = () => showModal("code");
+
+          const btnVerify = document.getElementById("btn-verify");
+          if (btnVerify) {
+            btnVerify.onclick = () => {
+              state.verify = verifySig(state.sign, state.key);
+              state.modal = null;
+              render();
+            };
+          }
+          const btnVerifyAlg = document.getElementById("btn-verify-alg");
+          if (btnVerifyAlg) btnVerifyAlg.onclick = () => showModal("verify_algorithm");
+          const btnVerifyPython = document.getElementById("btn-verify-python");
+          if (btnVerifyPython) btnVerifyPython.onclick = () => showModal("verify_python");
+          const btnVerifyCode = document.getElementById("btn-verify-code");
+          if (btnVerifyCode) btnVerifyCode.onclick = () => showModal("verify_code");
+          const modalBackdrop = document.getElementById("modal-backdrop");
+          if (modalBackdrop) {
+            modalBackdrop.onclick = (event) => {
+              if (event.target && event.target.id === "modal-backdrop") {
+                state.modal = null;
+                render();
+              }
+            };
+          }
+          const btnModalClose = document.getElementById("btn-modal-close");
+          if (btnModalClose) {
+            btnModalClose.onclick = () => {
+              state.modal = null;
+              render();
+            };
+          }
+        }
+
+        try {
+          ensureBundlePrimitives();
+          render();
+        } catch (err) {
+          state.error = err && err.message ? err.message : String(err);
+          render();
+        }
+      })();
+    </script>
+  </body>
+</html>

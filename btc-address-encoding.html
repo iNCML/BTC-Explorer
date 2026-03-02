@@ -1,0 +1,1398 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bitcoin Address Encoding Explorer</title>
+  <style>
+    :root {
+      --bg: #f4efe6;
+      --spot-1: #fce8cc;
+      --spot-2: #f6d9b5;
+      --panel: #fff9ef;
+      --ink: #1f1a17;
+      --muted: #6c635c;
+      --line: #e5d7c7;
+      --accent: #c56516;
+      --accent-2: #ef9a4d;
+      --accent-soft: #fff0de;
+      --accent-shadow: rgba(197, 101, 22, 0.3);
+      --result-border: #e9c7a8;
+      --result-bg: #fff4e8;
+      --result-label: #9c4d10;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 15% 0%, var(--spot-1) 0%, transparent 40%),
+        radial-gradient(circle at 90% 100%, var(--spot-2) 0%, transparent 45%),
+        var(--bg);
+      line-height: 1.4;
+    }
+
+    body[data-theme="p2pkh"] {
+      --bg: #f4efe6;
+      --spot-1: #fce8cc;
+      --spot-2: #f6d9b5;
+      --panel: #fff9ef;
+      --line: #e5d7c7;
+      --accent: #c56516;
+      --accent-2: #ef9a4d;
+      --accent-soft: #fff0de;
+      --accent-shadow: rgba(197, 101, 22, 0.3);
+      --result-border: #e9c7a8;
+      --result-bg: #fff4e8;
+      --result-label: #9c4d10;
+    }
+
+    body[data-theme="p2sh"] {
+      --bg: #eaf2f8;
+      --spot-1: #d8e9ff;
+      --spot-2: #cae0fa;
+      --panel: #f7fbff;
+      --line: #c8daec;
+      --accent: #1e6fb5;
+      --accent-2: #3f92da;
+      --accent-soft: #e5f2ff;
+      --accent-shadow: rgba(30, 111, 181, 0.3);
+      --result-border: #bdd5ea;
+      --result-bg: #edf6ff;
+      --result-label: #14558d;
+    }
+
+    body[data-theme="segwit"] {
+      --bg: #eaf6ef;
+      --spot-1: #d7f1e2;
+      --spot-2: #c8e9d6;
+      --panel: #f7fffb;
+      --line: #c7e2d2;
+      --accent: #1f8d4e;
+      --accent-2: #3fbe76;
+      --accent-soft: #e3f7ea;
+      --accent-shadow: rgba(31, 141, 78, 0.3);
+      --result-border: #bcdfca;
+      --result-bg: #edf9f1;
+      --result-label: #17683a;
+    }
+
+    body[data-theme="taproot"] {
+      --bg: #f3edf2;
+      --spot-1: #edd9e6;
+      --spot-2: #e8d2dc;
+      --panel: #fff9fc;
+      --line: #e3cad7;
+      --accent: #9a2f5e;
+      --accent-2: #c44b7f;
+      --accent-soft: #fbeaf2;
+      --accent-shadow: rgba(154, 47, 94, 0.3);
+      --result-border: #ebc9d8;
+      --result-bg: #fff0f6;
+      --result-label: #7d224a;
+    }
+
+    .page {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 28px 16px 48px;
+    }
+
+    .hero {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 8px 24px rgba(31, 26, 23, 0.06);
+      margin-bottom: 18px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(1.3rem, 2.8vw, 2rem);
+      letter-spacing: 0.01em;
+    }
+
+    .hero p {
+      margin: 0;
+      color: var(--muted);
+      max-width: 90ch;
+    }
+
+    .tabs {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin: 14px 0 18px;
+    }
+
+    .tab {
+      border: 1px solid var(--tab-color, var(--line));
+      border-radius: 12px;
+      padding: 10px 8px;
+      text-align: center;
+      background: var(--tab-bg, #fff);
+      color: var(--tab-ink, var(--ink));
+      cursor: pointer;
+      font-weight: 700;
+      transition: transform 0.14s ease, border-color 0.14s ease, box-shadow 0.14s ease, background 0.14s ease;
+    }
+
+    .tab:hover {
+      transform: translateY(-1px);
+      border-color: var(--tab-color, var(--accent));
+      box-shadow: 0 5px 14px rgba(31, 26, 23, 0.1);
+    }
+
+    .tab.active {
+      border-color: var(--tab-color, var(--accent));
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+      background: linear-gradient(180deg, var(--tab-active-top, var(--tab-color, var(--accent))) 0%, var(--tab-color, var(--accent)) 100%);
+      color: #fff;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 8px 22px rgba(31, 26, 23, 0.05);
+      overflow: hidden;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    #generateBtn {
+      border: 0;
+      border-radius: 10px;
+      background: linear-gradient(180deg, var(--accent-2) 0%, var(--accent) 100%);
+      color: white;
+      font-weight: 700;
+      padding: 10px 12px;
+      cursor: pointer;
+      box-shadow: 0 6px 14px var(--accent-shadow);
+    }
+
+    #generateBtn:disabled {
+      opacity: 0.55;
+      cursor: wait;
+    }
+
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 0.83rem;
+      color: var(--muted);
+      background: var(--accent-soft);
+    }
+
+    .fields {
+      display: grid;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .key-primer {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.82) 100%);
+      padding: 14px;
+      margin-bottom: 12px;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45);
+    }
+
+    .key-primer-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .key-primer h2 {
+      margin: 0;
+      font-size: 1.04rem;
+      letter-spacing: 0.01em;
+    }
+
+    .key-primer-tag {
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: var(--accent-soft);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 3px 8px;
+      white-space: nowrap;
+    }
+
+    .key-primer-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .key-primer-card {
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px;
+    }
+
+    .key-primer-card h3 {
+      margin: 0 0 6px;
+      font-size: 0.91rem;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      color: var(--result-label);
+    }
+
+    .key-primer-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    .key-primer-card-wide {
+      grid-column: 1 / -1;
+    }
+
+    .math-box {
+      margin: 7px 0;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--accent-soft);
+      padding: 8px;
+      overflow-x: auto;
+    }
+
+    .key-primer-note {
+      margin-top: 10px;
+      border-top: 1px dashed var(--line);
+      padding-top: 9px;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    .field {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px;
+      background: rgba(255, 255, 255, 0.8);
+    }
+
+    .field .k {
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #7e6f63;
+      margin-bottom: 6px;
+    }
+
+    .field .v {
+      font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+      word-break: break-all;
+      font-size: 0.9rem;
+    }
+
+    .step {
+      border-top: 1px dashed var(--line);
+      padding: 10px 0;
+    }
+
+    .step:first-of-type {
+      border-top: 0;
+      padding-top: 2px;
+    }
+
+    .step h3 {
+      margin: 0 0 4px;
+      font-size: 1rem;
+    }
+
+    .step p {
+      margin: 0 0 6px;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .step-actions {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .step-btn {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 4px 9px;
+      background: #fff;
+      color: var(--ink);
+      font-size: 0.8rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .step-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .mono {
+      font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+      word-break: break-all;
+      background: var(--accent-soft);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 6px 8px;
+      font-size: 0.86rem;
+    }
+
+    .result {
+      margin-top: 8px;
+      padding: 10px;
+      border-radius: 10px;
+      border: 1px solid var(--result-border);
+      background: var(--result-bg);
+    }
+
+    .result .k {
+      color: var(--result-label);
+      font-size: 0.82rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 4px;
+    }
+
+    .result .v {
+      font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+      word-break: break-all;
+      font-weight: 700;
+    }
+
+    .hint {
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(19, 15, 11, 0.55);
+      display: grid;
+      place-items: center;
+      padding: 16px;
+      z-index: 25;
+    }
+
+    .modal.hidden {
+      display: none;
+    }
+
+    .modal-card {
+      width: min(880px, 100%);
+      max-height: 88vh;
+      overflow: auto;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      box-shadow: 0 14px 38px rgba(19, 15, 11, 0.25);
+      padding: 12px;
+    }
+
+    .modal-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .modal-head h2 {
+      margin: 0;
+      font-size: 1.02rem;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .close-btn,
+    .copy-btn {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 5px 10px;
+      background: #fff;
+      color: var(--ink);
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .close-btn:hover,
+    .copy-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .modal-pre {
+      margin: 0;
+      background: var(--accent-soft);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 12px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+      font-size: 0.84rem;
+      line-height: 1.46;
+    }
+
+    @media (max-width: 840px) {
+      .tabs {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .key-primer-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <h1>Bitcoin Address Encoding Explorer</h1>
+      <p>
+        Interactive, step-by-step derivation from a random private key to final mainnet address encoding.
+        Includes legacy P2PKH (labeled as P2PSJ here), compatibility P2SH-P2WPKH, native SegWit (P2WPKH), and Taproot (P2TR, key-path).
+      </p>
+    </section>
+
+    <div class="tabs" id="tabs"></div>
+
+    <section class="card">
+      <div class="controls">
+        <button id="generateBtn">Generate Random Private Key</button>
+        <span class="pill" id="modePill"></span>
+      </div>
+
+      <section class="key-primer">
+        <div class="key-primer-head">
+          <h2>Key Generation Basics</h2>
+          <span class="key-primer-tag">secp256k1</span>
+        </div>
+        <div class="key-primer-grid">
+          <article class="key-primer-card">
+            <h3>Private Key Domain</h3>
+            <div class="math-box">
+              \[
+                d \in \{1,2,\dots,n-1\}
+              \]
+              \[
+                n=\texttt{0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141}
+              \]
+            </div>
+            <p>Choose <strong>uniform random</strong> \(d\) in this range; each valid value is a different secret key.</p>
+          </article>
+          <article class="key-primer-card">
+            <h3>Public Key from EC</h3>
+            <div class="math-box">
+              \[
+                Q=d\cdot G,\quad Q=(x,y)
+              \]
+            </div>
+            <p>\(G\) is the generator point. Computing \(Q\) from \(d\) is easy; reversing \(d\) from \(Q\) is infeasible.</p>
+          </article>
+          <article class="key-primer-card key-primer-card-wide">
+            <h3>Key Encoding Forms</h3>
+            <div class="math-box">
+              \[
+                \text{Uncompressed}=04\|x\|y \quad (65\ \text{bytes})
+              \]
+              \[
+                \text{Compressed}=
+                \begin{cases}
+                  02\|x,& \text{if } y \equiv 0 \pmod{2}\\
+                  03\|x,& \text{if } y \equiv 1 \pmod{2}
+                \end{cases}
+                \quad (33\ \text{bytes})
+              \]
+            </div>
+            <p>Equivalent rule: use prefix <code>02</code> when \(y \equiv 0 \pmod{2}\) (even \(y\)), and <code>03</code> when \(y \equiv 1 \pmod{2}\) (odd \(y\)).</p>
+          </article>
+        </div>
+        <div class="key-primer-note">
+          This app generates 32-byte private keys with cryptographic randomness and derives both pubkey forms from the same \(Q=d\cdot G\).
+        </div>
+      </section>
+
+      <div class="fields" id="keyFields"></div>
+      <div id="steps"></div>
+      <div class="hint">
+        Notes: mainnet only (`0x00`, `0x05`, HRP `bc`). P2SH is shown as <strong>P2SH-P2WPKH</strong> because raw P2SH needs a redeem script; this is the standard pubkey-derived compatibility form.
+      </div>
+    </section>
+  </main>
+
+  <div class="modal hidden" id="stepModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2 id="modalTitle"></h2>
+        <div class="modal-actions">
+          <button class="copy-btn" type="button" id="modalCopy">Copy</button>
+          <button class="close-btn" type="button" id="modalClose">Close</button>
+        </div>
+      </div>
+      <pre class="modal-pre" id="modalBody"></pre>
+    </div>
+  </div>
+
+  <script type="module">
+    import * as secp from "https://esm.sh/@noble/secp256k1@1.7.1";
+    import { sha256 } from "https://esm.sh/@noble/hashes@1.5.0/sha256";
+    import { ripemd160 } from "https://esm.sh/@noble/hashes@1.5.0/ripemd160";
+    import { bech32, bech32m } from "https://esm.sh/@scure/base@1.1.6";
+
+    const modes = [
+      {
+        key: "p2pkh",
+        label: "P2PSJ (P2PKH)",
+        description: "Legacy Base58Check address from HASH160(compressed pubkey).",
+        tabColor: "#c56516",
+        tabBg: "#fff4e8",
+        tabActiveTop: "#ef9a4d"
+      },
+      {
+        key: "p2sh",
+        label: "P2SH",
+        description: "Compatibility P2SH-P2WPKH, Base58Check with version byte 0x05.",
+        tabColor: "#1e6fb5",
+        tabBg: "#ebf4ff",
+        tabActiveTop: "#3f92da"
+      },
+      {
+        key: "segwit",
+        label: "Segwit",
+        description: "Native P2WPKH (BIP173 bech32, witness v0).",
+        tabColor: "#1f8d4e",
+        tabBg: "#e9f8ef",
+        tabActiveTop: "#3fbe76"
+      },
+      {
+        key: "taproot",
+        label: "Taproot",
+        description: "P2TR key-path (BIP341/350 bech32m, witness v1).",
+        tabColor: "#9a2f5e",
+        tabBg: "#fbeaf2",
+        tabActiveTop: "#c44b7f"
+      }
+    ];
+
+    const tabsEl = document.getElementById("tabs");
+    const generateBtn = document.getElementById("generateBtn");
+    const modePill = document.getElementById("modePill");
+    const keyFields = document.getElementById("keyFields");
+    const stepsEl = document.getElementById("steps");
+    const stepModal = document.getElementById("stepModal");
+    const modalTitleEl = document.getElementById("modalTitle");
+    const modalBodyEl = document.getElementById("modalBody");
+    const modalCloseBtn = document.getElementById("modalClose");
+    const modalCopyBtn = document.getElementById("modalCopy");
+
+    let activeMode = modes[0].key;
+    let renderedSteps = [];
+    let modalKind = "algorithm";
+
+    function applyTheme() {
+      document.body.dataset.theme = activeMode;
+    }
+
+    function stepDef(title, explain, value, algorithm, code, options = {}) {
+      return {
+        title,
+        explain,
+        value,
+        algorithm,
+        code,
+        python: options.python || "",
+        isResult: Boolean(options.isResult)
+      };
+    }
+
+    function pyHash160Snippet(inputHex) {
+      return `import hashlib
+
+def ripemd160(data: bytes) -> bytes:
+    try:
+        h = hashlib.new("ripemd160")
+        h.update(data)
+        return h.digest()
+    except ValueError:
+        try:
+            from Crypto.Hash import RIPEMD160  # pip install pycryptodome
+        except ImportError as exc:
+            raise RuntimeError(
+                "RIPEMD160 is unavailable. Install dependency: pip install pycryptodome"
+            ) from exc
+        h = RIPEMD160.new()
+        h.update(data)
+        return h.digest()
+
+pubkey = bytes.fromhex("${inputHex}")
+h160 = ripemd160(hashlib.sha256(pubkey).digest())
+print(h160.hex())`;
+    }
+
+    function pyVersionedPayloadSnippet(versionByteHex, payloadHex) {
+      return `version = bytes.fromhex("${versionByteHex}")
+payload = bytes.fromhex("${payloadHex}")
+versioned = version + payload
+print(versioned.hex())`;
+    }
+
+    function pyChecksumSnippet(versionedHex) {
+      return `import hashlib
+
+versioned = bytes.fromhex("${versionedHex}")
+checksum = hashlib.sha256(hashlib.sha256(versioned).digest()).digest()[:4]
+print(checksum.hex())`;
+    }
+
+    function pyBase58CheckSnippet(versionedHex) {
+      return `import hashlib
+
+ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+
+def b58encode(data: bytes) -> str:
+    n = int.from_bytes(data, "big")
+    out = ""
+    while n > 0:
+        n, r = divmod(n, 58)
+        out = ALPHABET[r] + out
+    pad = 0
+    for b in data:
+        if b == 0:
+            pad += 1
+        else:
+            break
+    return "1" * pad + (out or "1")
+
+versioned = bytes.fromhex("${versionedHex}")
+checksum = hashlib.sha256(hashlib.sha256(versioned).digest()).digest()[:4]
+address = b58encode(versioned + checksum)
+print(address)`;
+    }
+
+    function pyRedeemScriptSnippet(pkHashHex) {
+      return `pubkey_hash = bytes.fromhex("${pkHashHex}")
+redeem_script = bytes([0x00, 0x14]) + pubkey_hash
+print(redeem_script.hex())`;
+    }
+
+    function pyScriptHashSnippet(redeemScriptHex) {
+      return `import hashlib
+
+def ripemd160(data: bytes) -> bytes:
+    try:
+        h = hashlib.new("ripemd160")
+        h.update(data)
+        return h.digest()
+    except ValueError:
+        try:
+            from Crypto.Hash import RIPEMD160  # pip install pycryptodome
+        except ImportError as exc:
+            raise RuntimeError(
+                "RIPEMD160 is unavailable. Install dependency: pip install pycryptodome"
+            ) from exc
+        h = RIPEMD160.new()
+        h.update(data)
+        return h.digest()
+
+redeem_script = bytes.fromhex("${redeemScriptHex}")
+script_hash = ripemd160(hashlib.sha256(redeem_script).digest())
+print(script_hash.hex())`;
+    }
+
+    function pyConvertBitsSnippet(programHex, witnessVersion = 0) {
+      return `def convert_bits(data, from_bits=8, to_bits=5, pad=True):
+    acc = 0
+    bits = 0
+    out = []
+    maxv = (1 << to_bits) - 1
+    for value in data:
+        acc = (acc << from_bits) | value
+        bits += from_bits
+        while bits >= to_bits:
+            bits -= to_bits
+            out.append((acc >> bits) & maxv)
+    if pad and bits:
+        out.append((acc << (to_bits - bits)) & maxv)
+    return out
+
+program = bytes.fromhex("${programHex}")
+words = [${witnessVersion}] + convert_bits(program, 8, 5, True)
+print(words)`;
+    }
+
+    function pyBech32Snippet(programHex, witnessVersion = 0, hrp = "bc", useBech32m = false) {
+      return `CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
+GEN = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3]
+CONST = ${useBech32m ? "0x2bc830a3  # BECH32M" : "1  # BECH32"}
+
+def bech32_polymod(values):
+    chk = 1
+    for v in values:
+        top = chk >> 25
+        chk = ((chk & 0x1ffffff) << 5) ^ v
+        for i in range(5):
+            if (top >> i) & 1:
+                chk ^= GEN[i]
+    return chk
+
+def hrp_expand(h):
+    return [ord(x) >> 5 for x in h] + [0] + [ord(x) & 31 for x in h]
+
+def convert_bits(data, from_bits=8, to_bits=5, pad=True):
+    acc = 0
+    bits = 0
+    out = []
+    maxv = (1 << to_bits) - 1
+    for value in data:
+        acc = (acc << from_bits) | value
+        bits += from_bits
+        while bits >= to_bits:
+            bits -= to_bits
+            out.append((acc >> bits) & maxv)
+    if pad and bits:
+        out.append((acc << (to_bits - bits)) & maxv)
+    return out
+
+def create_checksum(hrp, data):
+    pm = bech32_polymod(hrp_expand(hrp) + data + [0, 0, 0, 0, 0, 0]) ^ CONST
+    return [(pm >> (5 * (5 - i))) & 31 for i in range(6)]
+
+def encode(hrp, data):
+    combined = data + create_checksum(hrp, data)
+    return hrp + "1" + "".join(CHARSET[d] for d in combined)
+
+program = bytes.fromhex("${programHex}")
+data = [${witnessVersion}] + convert_bits(program, 8, 5, True)
+address = encode("${hrp}", data)
+print(address)`;
+    }
+
+    function pyTaprootInternalKeySnippet(privateKeyHex) {
+      return `from ecdsa import SECP256k1, SigningKey
+
+n = SECP256k1.order
+d = int("${privateKeyHex}", 16)
+if not (1 <= d < n):
+    raise ValueError("invalid private key")
+
+P = SigningKey.from_secret_exponent(d, curve=SECP256k1).verifying_key.pubkey.point
+if P.y() & 1:
+    d = n - d
+    P = SigningKey.from_secret_exponent(d, curve=SECP256k1).verifying_key.pubkey.point
+
+internal_key = P.x().to_bytes(32, "big")
+print(internal_key.hex())`;
+    }
+
+    function pyTapTweakSnippet(internalKeyHex) {
+      return `import hashlib
+
+internal_key = bytes.fromhex("${internalKeyHex}")
+tag = b"TapTweak"
+tag_hash = hashlib.sha256(tag).digest()
+tweak = hashlib.sha256(tag_hash + tag_hash + internal_key).digest()
+print(tweak.hex())`;
+    }
+
+    function pyTaprootOutputKeySnippet(privateKeyHex) {
+      return `import hashlib
+from ecdsa import SECP256k1, SigningKey
+
+curve = SECP256k1
+G = curve.generator
+n = curve.order
+d = int("${privateKeyHex}", 16)
+if not (1 <= d < n):
+    raise ValueError("invalid private key")
+
+P = SigningKey.from_secret_exponent(d, curve=curve).verifying_key.pubkey.point
+if P.y() & 1:
+    d = n - d
+    P = SigningKey.from_secret_exponent(d, curve=curve).verifying_key.pubkey.point
+
+internal_key = P.x().to_bytes(32, "big")
+tag_hash = hashlib.sha256(b"TapTweak").digest()
+tweak = int.from_bytes(hashlib.sha256(tag_hash + tag_hash + internal_key).digest(), "big")
+if tweak >= n:
+    raise ValueError("invalid tweak")
+
+Q = P + tweak * G
+output_key = Q.x().to_bytes(32, "big")
+print(output_key.hex())`;
+    }
+
+    function pyTaprootTweakedSecretSnippet(normalizedPrivateHex, tweakHex) {
+      return `from ecdsa import SECP256k1
+
+n = SECP256k1.order
+d_norm = int("${normalizedPrivateHex}", 16)
+tweak = int("${tweakHex}", 16)
+tweaked = (d_norm + tweak) % n
+print(f"{tweaked:064x}")`;
+    }
+
+    function bytesToHex(bytes) {
+      return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+    }
+
+    function hexToBytes(hex) {
+      if (hex.length % 2 !== 0) throw new Error("Invalid hex length");
+      const out = new Uint8Array(hex.length / 2);
+      for (let i = 0; i < out.length; i++) {
+        out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+      }
+      return out;
+    }
+
+    function concatBytes(...arrays) {
+      const len = arrays.reduce((n, a) => n + a.length, 0);
+      const out = new Uint8Array(len);
+      let off = 0;
+      for (const a of arrays) {
+        out.set(a, off);
+        off += a.length;
+      }
+      return out;
+    }
+
+    function hash160(bytes) {
+      return ripemd160(sha256(bytes));
+    }
+
+    function doubleSha256(bytes) {
+      return sha256(sha256(bytes));
+    }
+
+    const BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+
+    function base58Encode(bytes) {
+      let x = 0n;
+      for (const b of bytes) {
+        x = (x << 8n) + BigInt(b);
+      }
+      let encoded = "";
+      while (x > 0n) {
+        const rem = Number(x % 58n);
+        x /= 58n;
+        encoded = BASE58_ALPHABET[rem] + encoded;
+      }
+      for (const b of bytes) {
+        if (b === 0) encoded = "1" + encoded;
+        else break;
+      }
+      return encoded || "1";
+    }
+
+    function base58Check(versionByte, payload) {
+      const body = concatBytes(new Uint8Array([versionByte]), payload);
+      const checksum = doubleSha256(body).slice(0, 4);
+      return {
+        body,
+        checksum,
+        full: concatBytes(body, checksum),
+        address: base58Encode(concatBytes(body, checksum))
+      };
+    }
+
+    function convertBits(data, from, to, pad = true) {
+      let acc = 0;
+      let bits = 0;
+      const out = [];
+      const maxv = (1 << to) - 1;
+      for (const value of data) {
+        if (value < 0 || value >> from) throw new Error("Invalid value for bit conversion");
+        acc = (acc << from) | value;
+        bits += from;
+        while (bits >= to) {
+          bits -= to;
+          out.push((acc >> bits) & maxv);
+        }
+      }
+      if (pad) {
+        if (bits > 0) out.push((acc << (to - bits)) & maxv);
+      } else if (bits >= from || ((acc << (to - bits)) & maxv)) {
+        throw new Error("Invalid incomplete group");
+      }
+      return out;
+    }
+
+    function bech32Address(hrp, version, program, useM = false) {
+      const words = [version, ...convertBits(program, 8, 5, true)];
+      return useM ? bech32m.encode(hrp, words) : bech32.encode(hrp, words);
+    }
+
+    function taggedHash(tag, msg) {
+      const encoder = new TextEncoder();
+      const tagBytes = encoder.encode(tag);
+      const tagHash = sha256(tagBytes);
+      return sha256(concatBytes(tagHash, tagHash, msg));
+    }
+
+    function bigintFromBytes(bytes) {
+      let hex = bytesToHex(bytes);
+      if (!hex) hex = "0";
+      return BigInt("0x" + hex);
+    }
+
+    function bigintTo32Bytes(v) {
+      const hex = v.toString(16).padStart(64, "0");
+      return hexToBytes(hex);
+    }
+
+    function getRandomPrivateKey() {
+      // noble's helper enforces 1 <= d < n for secp256k1.
+      return secp.utils.randomPrivateKey();
+    }
+
+    function getPublicKeys(privKeyBytes) {
+      const compressed = secp.getPublicKey(privKeyBytes, true);
+      const uncompressed = secp.getPublicKey(privKeyBytes, false);
+      return { compressed, uncompressed };
+    }
+
+    function computeP2PKH(pubCompressed) {
+      const pkHash = hash160(pubCompressed);
+      const payload = base58Check(0x00, pkHash);
+      return {
+        steps: [
+          stepDef(
+            "1) HASH160(public key)",
+            "Apply SHA-256, then RIPEMD-160 to the compressed public key.",
+            bytesToHex(pkHash),
+            `Diagram:\ncompressed_pubkey (33 bytes)\n  -> SHA256\n  -> RIPEMD160\n= pubKeyHash (20 bytes)`,
+            `Bitcoin Core equivalent (hash.h):\nuint160 pubKeyHash = Hash160(pubkey_bytes);`,
+            { python: pyHash160Snippet(bytesToHex(pubCompressed)) }
+          ),
+          stepDef(
+            "2) Add version byte",
+            "Mainnet P2PKH uses version byte 0x00.",
+            bytesToHex(payload.body),
+            `Diagram:\npubKeyHash (20 bytes)\n  + 0x00 prefix (PUBKEY_ADDRESS)\n= versioned payload (21 bytes)`,
+            `Bitcoin Core equivalent (key_io.cpp):\nstd::vector<unsigned char> data;\ndata.push_back(params.Base58Prefix(CChainParams::PUBKEY_ADDRESS)[0]);\ndata.insert(data.end(), id.begin(), id.end());`,
+            { python: pyVersionedPayloadSnippet("00", bytesToHex(pkHash)) }
+          ),
+          stepDef(
+            "3) Checksum",
+            "Checksum = first 4 bytes of SHA256(SHA256(version || payload)).",
+            bytesToHex(payload.checksum),
+            `Diagram:\nversioned_payload\n  -> SHA256\n  -> SHA256\n  -> take first 4 bytes\n= checksum`,
+            `Bitcoin Core exact routine (base58.cpp / EncodeBase58Check):\nuint256 hash = Hash(vch.begin(), vch.end());\nvch.insert(vch.end(), (unsigned char*)&hash, (unsigned char*)&hash + 4);`,
+            { python: pyChecksumSnippet(bytesToHex(payload.body)) }
+          ),
+          stepDef(
+            "4) Base58Check encode",
+            "Encode version || payload || checksum with Bitcoin Base58 alphabet.",
+            payload.address,
+            `Diagram:\nversioned_payload || checksum\n  -> Base58 alphabet\n= legacy address`,
+            `Bitcoin Core exact routine (base58.cpp):\nreturn EncodeBase58(vch);`,
+            {
+              python: pyBase58CheckSnippet(bytesToHex(payload.body)),
+              isResult: true
+            }
+          )
+        ],
+        address: payload.address
+      };
+    }
+
+    function computeP2SH_P2WPKH(pubCompressed) {
+      const pkHash = hash160(pubCompressed);
+      const redeemScript = concatBytes(new Uint8Array([0x00, 0x14]), pkHash);
+      const scriptHash = hash160(redeemScript);
+      const payload = base58Check(0x05, scriptHash);
+      return {
+        steps: [
+          stepDef(
+            "1) HASH160(public key)",
+            "For wrapped SegWit, start from pubKeyHash = HASH160(compressed pubkey).",
+            bytesToHex(pkHash),
+            `Diagram:\ncompressed_pubkey\n  -> SHA256\n  -> RIPEMD160\n= pubKeyHash`,
+            `Bitcoin Core equivalent (hash.h):\nuint160 pubKeyHash = Hash160(pubkey_bytes);`,
+            { python: pyHash160Snippet(bytesToHex(pubCompressed)) }
+          ),
+          stepDef(
+            "2) Build redeem script",
+            "Standard P2WPKH redeem script is 0x00 0x14 <20-byte pubKeyHash>.",
+            bytesToHex(redeemScript),
+            `Diagram:\nOP_0 (0x00)\nPUSHDATA(20) (0x14)\npubKeyHash (20 bytes)\n= redeemScript`,
+            `Bitcoin Core exact script form (script/standard):\nCScript redeemScript = CScript() << OP_0 << ToByteVector(pubKeyHash);`,
+            { python: pyRedeemScriptSnippet(bytesToHex(pkHash)) }
+          ),
+          stepDef(
+            "3) HASH160(redeem script)",
+            "P2SH locks to hash160 of the redeem script.",
+            bytesToHex(scriptHash),
+            `Diagram:\nredeemScript\n  -> SHA256\n  -> RIPEMD160\n= scriptHash`,
+            `Bitcoin Core equivalent:\nCScriptID scriptId = CScriptID(redeemScript); // Hash160(redeemScript)`,
+            { python: pyScriptHashSnippet(bytesToHex(redeemScript)) }
+          ),
+          stepDef(
+            "4) Add version byte",
+            "Mainnet P2SH uses version byte 0x05.",
+            bytesToHex(payload.body),
+            `Diagram:\nscriptHash (20 bytes)\n  + 0x05 prefix (SCRIPT_ADDRESS)\n= versioned payload`,
+            `Bitcoin Core equivalent (key_io.cpp):\nstd::vector<unsigned char> data;\ndata.push_back(params.Base58Prefix(CChainParams::SCRIPT_ADDRESS)[0]);\ndata.insert(data.end(), scriptId.begin(), scriptId.end());`,
+            { python: pyVersionedPayloadSnippet("05", bytesToHex(scriptHash)) }
+          ),
+          stepDef(
+            "5) Checksum + Base58Check",
+            "Append 4-byte double-SHA256 checksum and Base58 encode.",
+            payload.address,
+            `Diagram:\nversioned_payload\n  -> double SHA256 (first 4 bytes)\n  -> append checksum\n  -> Base58\n= P2SH address`,
+            `Bitcoin Core exact routine (base58.cpp):\nuint256 hash = Hash(vch.begin(), vch.end());\nvch.insert(vch.end(), (unsigned char*)&hash, (unsigned char*)&hash + 4);\nreturn EncodeBase58(vch);`,
+            {
+              python: pyBase58CheckSnippet(bytesToHex(payload.body)),
+              isResult: true
+            }
+          )
+        ],
+        address: payload.address
+      };
+    }
+
+    function computeSegWitP2WPKH(pubCompressed) {
+      const pkHash = hash160(pubCompressed);
+      const address = bech32Address("bc", 0, pkHash, false);
+      const words = [0, ...convertBits(pkHash, 8, 5, true)];
+      return {
+        steps: [
+          stepDef(
+            "1) HASH160(public key)",
+            "Input is the 33-byte compressed secp256k1 public key (0x02/0x03 + X). Compute SHA256(pubkey), then RIPEMD160(sha256) to get the 20-byte witness program.",
+            bytesToHex(pkHash),
+            `Diagram:\ninput pubkey (compressed, 33 bytes):\n${bytesToHex(pubCompressed)}\n  -> SHA256 (32 bytes)\n  -> RIPEMD160 (20 bytes)\n= witness_program / pubKeyHash`,
+            `Bitcoin Core equivalent (hash.h + key_io.cpp):\nCPubKey pubkey = ...; // serialized compressed key\nuint160 program = Hash160(pubkey); // Hash160 = RIPEMD160(SHA256(pubkey_bytes))`,
+            { python: pyHash160Snippet(bytesToHex(pubCompressed)) }
+          ),
+          stepDef(
+            "2) Witness data words",
+            "Convert the 20-byte program from 8-bit bytes into 5-bit groups using BIP173 ConvertBits with padding. Prefix witness version 0 as the first data word.",
+            words.join(" "),
+            `Diagram:\nprogram bytes (8-bit): [b0 b1 ... b19]\nacc = 0, bits = 0\nfor each byte v:\n  acc = (acc << 8) | v\n  bits += 8\n  while bits >= 5:\n    bits -= 5\n    emit (acc >> bits) & 31\nif pad=true and bits>0:\n  emit (acc << (5-bits)) & 31\nfinal data words = [0] + emitted_words`,
+            `Bitcoin Core exact pattern (key_io.cpp + util/strencodings):\nstd::vector<unsigned char> data;\ndata.push_back(WITNESS_V0_KEYHASH); // 0\nConvertBits<8, 5, true>([&](unsigned char c) {\n    data.push_back(c);\n}, program.begin(), program.end());`,
+            { python: pyConvertBitsSnippet(bytesToHex(pkHash), 0) }
+          ),
+          stepDef(
+            "3) Bech32 encode",
+            "Encode HRP 'bc' + separator '1' + data words + 6-char checksum. For witness v0, checksum type is Bech32 (not Bech32m).",
+            address,
+            `Diagram:\nHRP = "bc"\nhrp_expand = expand(\"bc\")\nvalues = hrp_expand || data || [0,0,0,0,0,0]\npolymod = Bech32Polymod(values) XOR 1\nchecksum = 6 x 5-bit values from polymod\naddress = \"bc\" + \"1\" + charset(data || checksum)\n(BIP173, witness v0 -> BECH32 constant 1)`,
+            `Bitcoin Core exact pattern (key_io.cpp + bech32.cpp):\nreturn bech32::Encode(bech32::Encoding::BECH32,\n                      params.Bech32HRP(),\n                      data);\n// bech32::Encode internally does HRP expansion, polymod, and checksum appending.`,
+            {
+              python: pyBech32Snippet(bytesToHex(pkHash), 0, "bc", false),
+              isResult: true
+            }
+          )
+        ],
+        address
+      };
+    }
+
+    function computeTaprootP2TR(privKeyBytes) {
+      const n = secp.CURVE.n;
+      const d0 = bigintFromBytes(privKeyBytes);
+
+      // Internal key must use even-Y point for BIP340 x-only format.
+      const p0 = secp.Point.fromPrivateKey(privKeyBytes);
+      let d = d0;
+      let p = p0;
+      if (p.y & 1n) {
+        d = n - d0;
+        p = p0.negate();
+      }
+
+      const internalKey = bigintTo32Bytes(p.x);
+      const tweakBytes = taggedHash("TapTweak", internalKey);
+      const tweak = bigintFromBytes(tweakBytes);
+      if (tweak >= n) throw new Error("Taproot tweak out of range");
+
+      // Key-path output key Q = P + tweak*G
+      const q = secp.Point.BASE.multiply(tweak).add(p);
+      const outputKey = bigintTo32Bytes(q.x);
+      const address = bech32Address("bc", 1, outputKey, true);
+
+      const tweakedSecret = (d + tweak) % n;
+      const normalizedPrivateHex = bytesToHex(bigintTo32Bytes(d));
+      const tweakHex = bytesToHex(tweakBytes);
+      return {
+        steps: [
+          stepDef(
+            "1) Internal x-only public key",
+            "Derive P=dG and normalize to even-Y form per BIP340; keep only 32-byte x-coordinate.",
+            bytesToHex(internalKey),
+            `Diagram:\nprivate key d\n  -> point P = dG\n  -> if y(P) is odd: use -P and d = n-d\n  -> keep x(P) only\n= internal_key (32 bytes)`,
+            `libsecp256k1 exact API pattern:\nsecp256k1_keypair_create(ctx, &keypair, seckey32);\nsecp256k1_keypair_xonly_pub(ctx, &internal, &pk_parity, &keypair);\nif (pk_parity) secp256k1_ec_seckey_negate(ctx, seckey32);`,
+            { python: pyTaprootInternalKeySnippet(bytesToHex(privKeyBytes)) }
+          ),
+          stepDef(
+            "2) TapTweak tagged hash",
+            "t = SHA256(SHA256(tag)||SHA256(tag)||internal_key), tag='TapTweak'.",
+            bytesToHex(tweakBytes),
+            `Diagram:\ntag = "TapTweak"\nT = SHA256(tag)\ntweak = SHA256(T || T || internal_key)\n= t`,
+            `Bitcoin Core/libsecp256k1 equivalent:\n// tagged hash \"TapTweak\" over 32-byte internal key\nuint256 tweak = TaggedHash(\"TapTweak\", internal_key32);`,
+            { python: pyTapTweakSnippet(bytesToHex(internalKey)) }
+          ),
+          stepDef(
+            "3) Tweaked output key",
+            "Compute Q = P + tG and take x(Q) as 32-byte witness program.",
+            bytesToHex(outputKey),
+            `Diagram:\ninternal point P\n+t * G\n= output point Q\nwitness program = x(Q)`,
+            `libsecp256k1 exact API pattern:\nsecp256k1_xonly_pubkey_tweak_add(ctx, &output_pubkey, &internal, tweak32);\nsecp256k1_xonly_pubkey_serialize(ctx, output_key32, &output_pubkey);`,
+            { python: pyTaprootOutputKeySnippet(bytesToHex(privKeyBytes)) }
+          ),
+          stepDef(
+            "4) Tweaked private key (key-path signing)",
+            "For key-path spends, secret key is (d + t) mod n after parity normalization.",
+            bytesToHex(bigintTo32Bytes(tweakedSecret)),
+            `Diagram:\nnormalized d\n+t\nmod n\n= tweaked secret`,
+            `Bitcoin Core/libsecp256k1 equivalent:\n// after parity normalization\nsecp256k1_ec_seckey_tweak_add(ctx, seckey32, tweak32);`,
+            {
+              python: pyTaprootTweakedSecretSnippet(normalizedPrivateHex, tweakHex)
+            }
+          ),
+          stepDef(
+            "5) Bech32m encode",
+            "Encode witness version 1 + 32-byte program using Bech32m (BIP350), HRP 'bc'.",
+            address,
+            `Diagram:\nHRP = "bc"\nversion = 1\ndata = ConvertBits(output_key32, 8->5)\nchecksum = Bech32m\n= taproot address`,
+            `Bitcoin Core exact pattern (key_io.cpp):\nstd::vector<unsigned char> data;\ndata.push_back(WITNESS_V1_TAPROOT);\nConvertBits<8, 5, true>([&](unsigned char c){ data.push_back(c); }, output_key32.begin(), output_key32.end());\nreturn bech32::Encode(bech32::Encoding::BECH32M, params.Bech32HRP(), data);`,
+            {
+              python: pyBech32Snippet(bytesToHex(outputKey), 1, "bc", true),
+              isResult: true
+            }
+          )
+        ],
+        address
+      };
+    }
+
+    function renderTabs() {
+      tabsEl.innerHTML = "";
+      for (const mode of modes) {
+        const btn = document.createElement("button");
+        btn.className = "tab" + (mode.key === activeMode ? " active" : "");
+        btn.style.setProperty("--tab-color", mode.tabColor);
+        btn.style.setProperty("--tab-bg", mode.tabBg);
+        btn.style.setProperty("--tab-active-top", mode.tabActiveTop);
+        btn.textContent = mode.label;
+        btn.type = "button";
+        btn.addEventListener("click", () => {
+          activeMode = mode.key;
+          applyTheme();
+          renderTabs();
+          renderPlaceholder();
+        });
+        tabsEl.appendChild(btn);
+      }
+    }
+
+    function renderPlaceholder() {
+      const mode = modes.find((m) => m.key === activeMode);
+      modePill.textContent = mode.description;
+      keyFields.innerHTML = "";
+      renderedSteps = [];
+      stepsEl.innerHTML = "<p class=\"hint\">Click <strong>Generate Random Private Key</strong> to run the full derivation.</p>";
+    }
+
+    function field(label, value) {
+      return `<div class=\"field\"><div class=\"k\">${label}</div><div class=\"v\">${value}</div></div>`;
+    }
+
+    function escapeHtml(v) {
+      return v
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function openModal(title, body, kind = "algorithm") {
+      modalKind = kind;
+      modalTitleEl.textContent = title;
+      modalBodyEl.textContent = body;
+      modalCopyBtn.textContent = "Copy";
+      stepModal.classList.remove("hidden");
+    }
+
+    function closeModal() {
+      stepModal.classList.add("hidden");
+    }
+
+    async function copyModalContent() {
+      const payload = (modalKind === "python" || modalKind === "btc-codes")
+        ? modalBodyEl.textContent
+        : `${modalTitleEl.textContent}\n\n${modalBodyEl.textContent}`;
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(payload);
+        } else {
+          const ta = document.createElement("textarea");
+          ta.value = payload;
+          ta.setAttribute("readonly", "");
+          ta.style.position = "fixed";
+          ta.style.opacity = "0";
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand("copy");
+          document.body.removeChild(ta);
+        }
+        modalCopyBtn.textContent = "Copied";
+      } catch {
+        modalCopyBtn.textContent = "Copy failed";
+      }
+    }
+
+    function renderSteps(result, modeKey) {
+      renderedSteps = result.steps;
+      const blocks = result.steps.map((s, index) => {
+        const value = escapeHtml(String(s.value));
+        const actions = `
+          <div class="step-actions">
+            <button class="step-btn" type="button" data-step-index="${index}" data-step-action="algorithm">Algorithm</button>
+            <button class="step-btn" type="button" data-step-index="${index}" data-step-action="python">Python</button>
+            <button class="step-btn" type="button" data-step-index="${index}" data-step-action="btc-codes">BTC Codes</button>
+          </div>
+        `;
+        if (s.isResult) {
+          return `
+            <article class="step">
+              <h3>${escapeHtml(s.title)}</h3>
+              <p>${escapeHtml(s.explain)}</p>
+              ${actions}
+              <div class="result">
+                <div class="k">Final Address</div>
+                <div class="v">${value}</div>
+              </div>
+            </article>
+          `;
+        }
+        return `
+          <article class="step">
+            <h3>${escapeHtml(s.title)}</h3>
+            <p>${escapeHtml(s.explain)}</p>
+            ${actions}
+            <div class="mono">${value}</div>
+          </article>
+        `;
+      });
+
+      stepsEl.innerHTML = blocks.join("\n");
+    }
+
+    async function handleGenerate() {
+      generateBtn.disabled = true;
+      try {
+        const priv = getRandomPrivateKey();
+        const pub = getPublicKeys(priv);
+        const privHex = bytesToHex(priv);
+        const pubCompressedHex = bytesToHex(pub.compressed);
+        const pubUncompressedHex = bytesToHex(pub.uncompressed);
+
+        keyFields.innerHTML = [
+          field("Private Key (hex, 32 bytes)", escapeHtml(privHex)),
+          field("Public Key (compressed)", escapeHtml(pubCompressedHex)),
+          field("Public Key (uncompressed)", escapeHtml(pubUncompressedHex))
+        ].join("\n");
+
+        let result;
+        if (activeMode === "p2pkh") {
+          result = computeP2PKH(pub.compressed);
+        } else if (activeMode === "p2sh") {
+          result = computeP2SH_P2WPKH(pub.compressed);
+        } else if (activeMode === "segwit") {
+          result = computeSegWitP2WPKH(pub.compressed);
+        } else if (activeMode === "taproot") {
+          result = computeTaprootP2TR(priv);
+        } else {
+          throw new Error("Unknown mode");
+        }
+
+        renderSteps(result, activeMode);
+      } catch (err) {
+        stepsEl.innerHTML = `<p class=\"hint\">Error: ${escapeHtml(String(err?.message || err))}</p>`;
+      } finally {
+        generateBtn.disabled = false;
+      }
+    }
+
+    stepsEl.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      const btn = target.closest(".step-btn");
+      if (!(btn instanceof HTMLButtonElement)) return;
+      const stepIndex = Number(btn.dataset.stepIndex);
+      const action = btn.dataset.stepAction;
+      const step = renderedSteps[stepIndex];
+      if (!step) return;
+
+      if (action === "algorithm") {
+        openModal(`${step.title} - Algorithm`, step.algorithm || "No algorithm details for this step.", "algorithm");
+      } else if (action === "python") {
+        openModal(`${step.title} - Python`, step.python || "No Python details for this step.", "python");
+      } else if (action === "btc-codes") {
+        openModal(`${step.title} - BTC Codes`, step.code || "No Bitcoin code details for this step.", "btc-codes");
+      }
+    });
+
+    modalCloseBtn.addEventListener("click", closeModal);
+    modalCopyBtn.addEventListener("click", copyModalContent);
+    stepModal.addEventListener("click", (event) => {
+      if (event.target === stepModal) closeModal();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") closeModal();
+    });
+
+    generateBtn.addEventListener("click", handleGenerate);
+
+    applyTheme();
+    renderTabs();
+    renderPlaceholder();
+  </script>
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [["\\(", "\\)"]],
+        displayMath: [["\\[", "\\]"]]
+      },
+      svg: {
+        fontCache: "global"
+      }
+    };
+  </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+</body>
+</html>

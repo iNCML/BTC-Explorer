@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BTC Address Checker (Static)</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; background:#f5f7fb; color:#111; }
+    .wrap { max-width: 760px; margin: 28px auto; background:#fff; border-radius: 12px; padding: 20px; box-shadow:0 2px 12px rgba(0,0,0,.08); }
+    h1 { margin: 0 0 12px; font-size: 24px; }
+    .price { font-size: 18px; padding: 12px; border-radius: 10px; background:#eef4ff; margin-bottom: 16px; }
+    .chg-up { color:#067647; font-weight:700; }
+    .chg-down { color:#b42318; font-weight:700; }
+    .muted { color:#667085; font-size: 12px; }
+    .row { display:flex; gap:8px; }
+    .input-wrap { position: relative; flex: 1; }
+    input { width:100%; box-sizing:border-box; padding: 12px 36px 12px 12px; font-size: 15px; border:1px solid #d0d5dd; border-radius: 10px; }
+    .clear-x {
+      position:absolute; right:10px; top:50%; transform:translateY(-50%);
+      width:20px; height:20px; border-radius:50%; border:none;
+      background:#e4e7ec; color:#344054; font-size:14px; line-height:20px;
+      cursor:pointer; display:none; padding:0;
+      z-index: 3;
+    }
+    .input-wrap.show-clear .clear-x { display:block; }
+    button { padding: 12px 16px; font-size: 15px; border:none; background:#0b57d0; color:#fff; border-radius: 10px; cursor:pointer; }
+    button:disabled { opacity:.6; cursor:not-allowed; }
+    .secondary { background:#344054; }
+    .card { margin-top: 16px; padding: 14px; border:1px solid #e4e7ec; border-radius: 10px; background:#fafafa; }
+    .err { color:#b42318; font-weight: 600; }
+    .ok { color:#067647; font-weight: 600; }
+    code { background:#f2f4f7; padding:2px 6px; border-radius:6px; word-break:break-all; }
+    .actions { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>BTC Address Checker (Static)</h1>
+    <div class="price" id="priceBox">Loading BTC price...</div>
+
+    <div class="row">
+      <div class="input-wrap" id="inputWrap">
+        <input id="addr" placeholder="Enter BTC address (e.g. bc1..., 1..., 3...)" />
+        <button id="clearX" class="clear-x" type="button" aria-label="Clear address">×</button>
+      </div>
+    </div>
+
+    <div class="actions" style="margin-top:8px;">
+      <button id="go">Search</button>
+      <button id="scanBtn" class="secondary">Scan QR</button>
+      <button id="uploadQrBtn" class="secondary">Upload QR</button>
+    </div>
+
+    <input id="qrFile" type="file" accept="image/*" style="display:none" />
+    <video id="qrVideo" style="display:none;width:100%;margin-top:10px;border-radius:10px;" autoplay playsinline muted></video>
+
+    <div class="muted" style="margin-top:8px;">Static mode: fetches live data from CoinGecko + Blockstream APIs.</div>
+
+    <div class="card" id="result">No search yet.</div>
+
+    <div class="actions">
+      <button id="copyBtn" class="secondary">Copy result</button>
+      <button id="shareBtn" class="secondary">Share</button>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+  <script>
+    const priceBox = document.getElementById('priceBox');
+    const result = document.getElementById('result');
+    const addrInput = document.getElementById('addr');
+    const inputWrap = document.getElementById('inputWrap');
+    const clearX = document.getElementById('clearX');
+    const goBtn = document.getElementById('go');
+    const scanBtn = document.getElementById('scanBtn');
+    const uploadQrBtn = document.getElementById('uploadQrBtn');
+    const qrFile = document.getElementById('qrFile');
+    const qrVideo = document.getElementById('qrVideo');
+    const copyBtn = document.getElementById('copyBtn');
+    const shareBtn = document.getElementById('shareBtn');
+    let lastResultText = '';
+
+    function normalizeAddress(raw) {
+      let s = (raw || '').trim();
+      if (!s) return '';
+      s = s.replace(/^bitcoin:/i, '');
+      const q = s.indexOf('?');
+      if (q >= 0) s = s.slice(0, q);
+      return s.trim();
+    }
+
+    function isLikelyBTCAddress(addr) {
+      return /^(bc1|[13])[a-zA-HJ-NP-Z0-9]{20,90}$/.test(addr);
+    }
+
+    async function loadPrice() {
+      try {
+        const [simpleRes, marketRes] = await Promise.all([
+          fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd,cad&include_last_updated_at=true&include_24hr_change=true'),
+          fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=bitcoin&price_change_percentage=7d')
+        ]);
+        const data = await simpleRes.json();
+        const market = await marketRes.json();
+
+        const btc = data?.bitcoin || {};
+        const market0 = Array.isArray(market) ? market[0] : null;
+        const updated = btc.last_updated_at ? new Date(btc.last_updated_at * 1000).toLocaleString() : 'n/a';
+        const c24 = Number(btc.usd_24h_change || 0);
+        const c7 = Number(market0?.price_change_percentage_7d_in_currency || 0);
+        const c24Class = c24 >= 0 ? 'chg-up' : 'chg-down';
+        const c7Class = c7 >= 0 ? 'chg-up' : 'chg-down';
+        const fmt = n => `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`;
+        priceBox.innerHTML = `<b>BTC</b> = <b>US$${Number(btc.usd||0).toLocaleString()}</b> | <b>C$${Number(btc.cad||0).toLocaleString()}</b><div style="margin-top:6px; font-size:15px;">24h: <span class="${c24Class}">${fmt(c24)}</span> &nbsp; | &nbsp; 7d: <span class="${c7Class}">${fmt(c7)}</span></div><div class="muted">Updated: ${updated}</div>`;
+      } catch {
+        priceBox.textContent = 'Unable to load BTC price right now.';
+      }
+    }
+
+    async function fetchJson(url) {
+      const r = await fetch(url);
+      if (!r.ok) throw new Error('request failed');
+      return await r.json();
+    }
+
+    function toLocal(v) {
+      if (!v) return 'n/a';
+      if (String(v).includes('pending')) return v;
+      const d = new Date(v);
+      return Number.isNaN(d.getTime()) ? v : d.toLocaleString();
+    }
+
+    function isSpendFromAddress(tx, addr) {
+      return Array.isArray(tx?.vin) && tx.vin.some(v => v?.prevout?.scriptpubkey_address === addr);
+    }
+
+    function isAddressActivity(tx, addr) {
+      const vinHit = Array.isArray(tx?.vin) && tx.vin.some(v => v?.prevout?.scriptpubkey_address === addr);
+      const voutHit = Array.isArray(tx?.vout) && tx.vout.some(v => v?.scriptpubkey_address === addr);
+      return vinHit || voutHit;
+    }
+
+    async function search() {
+      const addr = normalizeAddress(addrInput.value);
+      if (!addr) return;
+      addrInput.value = addr;
+
+      if (!isLikelyBTCAddress(addr)) {
+        result.innerHTML = `<div class="err">Invalid BTC address.</div><div class="muted">Please check and try again.</div>`;
+        lastResultText = 'Invalid BTC address';
+        return;
+      }
+
+      goBtn.disabled = true;
+      result.textContent = 'Searching...';
+
+      try {
+        const [a, firstPageTxs] = await Promise.all([
+          fetchJson(`https://blockstream.info/api/address/${encodeURIComponent(addr)}`),
+          fetchJson(`https://blockstream.info/api/address/${encodeURIComponent(addr)}/txs`)
+        ]);
+
+        const funded = Number(a?.chain_stats?.funded_txo_sum || 0);
+        const spent = Number(a?.chain_stats?.spent_txo_sum || 0);
+        const mempoolFunded = Number(a?.mempool_stats?.funded_txo_sum || 0);
+        const mempoolSpent = Number(a?.mempool_stats?.spent_txo_sum || 0);
+        const confirmedSats = funded - spent;
+        const pendingDeltaSats = mempoolFunded - mempoolSpent;
+        const totalSats = confirmedSats + pendingDeltaSats;
+        const txCount = Number(a?.chain_stats?.tx_count || 0) + Number(a?.mempool_stats?.tx_count || 0);
+
+        const latestTx = Array.isArray(firstPageTxs) && firstPageTxs.length ? firstPageTxs[0] : null;
+        const latestTxId = latestTx?.txid || 'n/a';
+        const latestTxUrl = latestTx?.txid ? `https://blockstream.info/tx/${latestTx.txid}` : '';
+        const lastAct = latestTx?.status?.block_time ? new Date(latestTx.status.block_time * 1000).toISOString() : (latestTx ? 'pending/unconfirmed tx' : 'n/a');
+
+        let lastSpentTxId = null;
+        let lastSpentAt = null;
+        let firstSeenTxId = null;
+        let firstSeenAt = null;
+        let firstSeenScannedCompletely = true;
+
+        let pageTxs = Array.isArray(firstPageTxs) ? firstPageTxs : [];
+        let pages = 0;
+        const maxPages = 40;
+
+        while (pageTxs.length > 0) {
+          pages += 1;
+          for (const tx of pageTxs) {
+            if (!lastSpentTxId && isSpendFromAddress(tx, addr)) {
+              lastSpentTxId = tx?.txid || null;
+              lastSpentAt = tx?.status?.block_time ? new Date(tx.status.block_time * 1000).toISOString() : 'pending/unconfirmed tx';
+            }
+            if (isAddressActivity(tx, addr)) {
+              firstSeenTxId = tx?.txid || firstSeenTxId;
+              firstSeenAt = tx?.status?.block_time ? new Date(tx.status.block_time * 1000).toISOString() : (firstSeenAt || 'pending/unconfirmed tx');
+            }
+          }
+
+          if (pages >= maxPages) {
+            firstSeenScannedCompletely = false;
+            break;
+          }
+          const lastTxidOnPage = pageTxs[pageTxs.length - 1]?.txid;
+          if (!lastTxidOnPage) break;
+          try {
+            pageTxs = await fetchJson(`https://blockstream.info/api/address/${encodeURIComponent(addr)}/txs/chain/${encodeURIComponent(lastTxidOnPage)}`);
+          } catch {
+            break;
+          }
+        }
+
+        const lastSpentTxUrl = lastSpentTxId ? `https://blockstream.info/tx/${lastSpentTxId}` : '';
+        const firstSeenTxUrl = firstSeenTxId ? `https://blockstream.info/tx/${firstSeenTxId}` : '';
+
+        result.innerHTML = `
+          <div class="ok">Valid BTC address</div>
+          <div style="margin-top:8px;"><code>${addr}</code></div>
+          <div style="margin-top:10px;">Confirmed: <b>${(confirmedSats/1e8).toFixed(8)} BTC</b></div>
+          <div>Pending delta: <b>${(pendingDeltaSats/1e8).toFixed(8)} BTC</b></div>
+          <div>Total (confirmed + pending): <b>${(totalSats/1e8).toFixed(8)} BTC</b></div>
+          <div>Transaction count: <b>${txCount.toLocaleString()}</b></div>
+          <div>Last activity: <b>${toLocal(lastAct)}</b></div>
+          <div>Latest transaction ID: <code>${latestTxId}</code></div>
+          <div>${latestTxUrl ? `<a href="${latestTxUrl}" target="_blank" rel="noopener noreferrer">View latest transaction page</a>` : '<span class="muted">No latest transaction link available</span>'}</div>
+          <hr style="border:none;border-top:1px solid #e4e7ec;margin:10px 0;" />
+          <div>Last spent (funds moved out): <b>${toLocal(lastSpentAt)}</b></div>
+          <div>Last spent txid: <code>${lastSpentTxId || 'n/a'}</code></div>
+          <div>${lastSpentTxUrl ? `<a href="${lastSpentTxUrl}" target="_blank" rel="noopener noreferrer">View last spent transaction page</a>` : '<span class="muted">No spent transaction found</span>'}</div>
+          <hr style="border:none;border-top:1px solid #e4e7ec;margin:10px 0;" />
+          <div>First seen: <b>${toLocal(firstSeenAt)}</b></div>
+          <div>First seen txid: <code>${firstSeenTxId || 'n/a'}</code></div>
+          <div>${firstSeenTxUrl ? `<a href="${firstSeenTxUrl}" target="_blank" rel="noopener noreferrer">View first seen transaction page</a>` : '<span class="muted">No first-seen transaction found</span>'}</div>
+          ${firstSeenScannedCompletely ? '' : '<div class="muted">First seen is based on partial history scan for very high-activity address.</div>'}
+          <div class="muted" style="margin-top:8px;">Sats: ${totalSats.toLocaleString()}</div>
+        `;
+
+        lastResultText = `Address: ${addr}\nConfirmed: ${(confirmedSats/1e8).toFixed(8)} BTC\nPending delta: ${(pendingDeltaSats/1e8).toFixed(8)} BTC\nTotal: ${(totalSats/1e8).toFixed(8)} BTC\nTransactions: ${txCount}\nLast activity: ${toLocal(lastAct)}\nLatest txid: ${latestTxId}${latestTxUrl ? `\nLatest tx URL: ${latestTxUrl}` : ''}\nLast spent at: ${toLocal(lastSpentAt)}\nLast spent txid: ${lastSpentTxId || 'n/a'}${lastSpentTxUrl ? `\nLast spent tx URL: ${lastSpentTxUrl}` : ''}\nFirst seen at: ${toLocal(firstSeenAt)}\nFirst seen txid: ${firstSeenTxId || 'n/a'}${firstSeenTxUrl ? `\nFirst seen tx URL: ${firstSeenTxUrl}` : ''}`;
+      } catch {
+        result.innerHTML = `<div class="err">Lookup failed. Please try again.</div>`;
+        lastResultText = 'Lookup failed';
+      } finally {
+        goBtn.disabled = false;
+      }
+    }
+
+    function refreshClearX() {
+      const hasText = !!addrInput.value;
+      const focused = document.activeElement === addrInput;
+      inputWrap.classList.toggle('show-clear', hasText && focused);
+    }
+
+    goBtn.addEventListener('click', search);
+
+    function clearAddressField(e) {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      addrInput.value = '';
+      addrInput.focus();
+      result.textContent = 'No search yet.';
+      lastResultText = '';
+      refreshClearX();
+    }
+
+    clearX.addEventListener('click', clearAddressField);
+    clearX.addEventListener('mousedown', clearAddressField);
+    clearX.addEventListener('pointerdown', clearAddressField);
+    clearX.addEventListener('touchstart', clearAddressField, { passive: false });
+    addrInput.addEventListener('focus', refreshClearX);
+    addrInput.addEventListener('blur', () => setTimeout(refreshClearX, 120));
+    addrInput.addEventListener('input', refreshClearX);
+    addrInput.addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
+
+    copyBtn.addEventListener('click', async () => {
+      if (!lastResultText) return;
+      try { await navigator.clipboard.writeText(lastResultText); copyBtn.textContent='Copied'; setTimeout(()=>copyBtn.textContent='Copy result',1200); } catch {}
+    });
+
+    shareBtn.addEventListener('click', async () => {
+      if (!lastResultText) return;
+      try {
+        if (navigator.share) await navigator.share({ title:'BTC Address Result', text:lastResultText });
+        else await navigator.clipboard.writeText(lastResultText);
+      } catch {}
+    });
+
+    async function startQrScan() {
+      if (!window.isSecureContext) {
+        alert('Camera needs HTTPS on iPhone. Please use HTTPS hosting, or use Upload QR.');
+        return;
+      }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+        qrVideo.srcObject = stream;
+        qrVideo.style.display = 'block';
+
+        const stopScan = () => { stream.getTracks().forEach(t => t.stop()); qrVideo.style.display = 'none'; };
+        const c = document.createElement('canvas');
+        const ctx = c.getContext('2d', { willReadFrequently: true });
+
+        const tick = async () => {
+          try {
+            if (qrVideo.videoWidth > 0 && qrVideo.videoHeight > 0) {
+              c.width = qrVideo.videoWidth; c.height = qrVideo.videoHeight;
+              ctx.drawImage(qrVideo, 0, 0, c.width, c.height);
+              const img = ctx.getImageData(0, 0, c.width, c.height);
+              const qr = window.jsQR ? window.jsQR(img.data, img.width, img.height, { inversionAttempts: 'attemptBoth' }) : null;
+              if (qr?.data) {
+                addrInput.value = normalizeAddress(qr.data);
+                stopScan();
+                search();
+                return;
+              }
+            }
+          } catch {}
+          requestAnimationFrame(tick);
+        };
+        tick();
+      } catch {
+        alert('Could not access camera. Try Upload QR.');
+      }
+    }
+
+    scanBtn.addEventListener('click', startQrScan);
+    uploadQrBtn.addEventListener('click', () => qrFile.click());
+    qrFile.addEventListener('change', async () => {
+      const file = qrFile.files?.[0];
+      if (!file) return;
+      try {
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; img.src = url; });
+
+        const c = document.createElement('canvas');
+        c.width = img.naturalWidth; c.height = img.naturalHeight;
+        const ctx = c.getContext('2d', { willReadFrequently: true });
+        ctx.drawImage(img, 0, 0);
+        const data = ctx.getImageData(0, 0, c.width, c.height);
+        const qr = window.jsQR ? window.jsQR(data.data, data.width, data.height, { inversionAttempts: 'attemptBoth' }) : null;
+        URL.revokeObjectURL(url);
+
+        if (qr?.data) {
+          addrInput.value = normalizeAddress(qr.data);
+          search();
+        } else {
+          alert('No QR code found in image.');
+        }
+      } catch {
+        alert('Could not read image QR.');
+      } finally {
+        qrFile.value = '';
+      }
+    });
+
+    loadPrice();
+    setInterval(loadPrice, 30000);
+  </script>
+</body>
+</html>
