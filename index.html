@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bitcoin Education Explorer</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      }
+      body {
+        margin: 0;
+        background: #0a1226;
+        color: #e6edff;
+      }
+      main {
+        max-width: 920px;
+        margin: 0 auto;
+        padding: 24px 16px 48px;
+      }
+      h1 {
+        margin: 0 0 8px;
+      }
+      p {
+        margin: 0 0 16px;
+        opacity: 0.9;
+      }
+      .grid {
+        display: grid;
+        gap: 12px;
+      }
+      a.card {
+        display: block;
+        border: 1px solid #344a7d;
+        border-radius: 12px;
+        background: #111d3c;
+        padding: 12px;
+        color: #e6edff;
+        text-decoration: none;
+      }
+      a.card:hover {
+        border-color: #5f80cc;
+        background: #16264f;
+      }
+      .title {
+        font-weight: 700;
+        margin-bottom: 4px;
+      }
+      .desc {
+        line-height: 1.45;
+        opacity: 0.95;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Bitcoin Education Explorer</h1>
+      <p>This project aims to explore technical details in Bitcoin Core in an interactive way for educational purposes.</p>
+      <section class="grid">
+        <a class="card" href="./btc-balance.html">
+          <div class="title">Checking BTC Balance</div>
+          <div class="desc">Check the balance of any BTC address on the Bitcoin network.</div>
+        </a>
+        <a class="card" href="./btc-address-encoding.html">
+          <div class="title">BTC Address Encoding</div>
+          <div class="desc">Explore multiple encoding methods used to create BTC addresses.</div>
+        </a>
+        <a class="card" href="./btc-signature-lab/index.html">
+          <div class="title">BTC Signature Methods</div>
+          <div class="desc">Demonstrates two popular digital signature methods used in the Bitcoin network: ECDSA and Schnorr.</div>
+        </a>
+        <a class="card" href="./btc-transactions/index.html">
+          <div class="title">BTC Transaction Sign/Verify</div>
+          <div class="desc">Demonstrates how to create transaction preimages, sign them, and verify them step by step.</div>
+        </a>
+      </section>
+    </main>
+  </body>
+</html>
