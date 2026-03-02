@@ -39,6 +39,21 @@
         gap: 10px;
         align-items: center;
       }
+      .scheme-tabs {
+        display: inline-flex;
+        gap: 8px;
+        margin-bottom: 10px;
+      }
+      .scheme-tabs button {
+        background: transparent;
+        border: 1px solid #4a5f90;
+        color: #c8d7ff;
+      }
+      .scheme-tabs button.active {
+        background: #2f57be;
+        border-color: #3e66c9;
+        color: #fff;
+      }
       button {
         cursor: pointer;
         border-radius: 8px;
@@ -175,6 +190,7 @@
         const BECH32_CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
 
         const state = {
+          scheme: "p2wsh",
           key: null,
           tx: null,
           sign: null,
@@ -295,6 +311,134 @@
 
         function btcFmt(sats) {
           return (Number(sats) / 100000000).toFixed(8);
+        }
+
+        function schemeLabel(scheme) {
+          return scheme === "p2wpkh" ? "P2WPKH" : "P2WSH";
+        }
+
+        const RIPEMD160_R1 = [
+          0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 7, 4, 13, 1, 10, 6, 15, 3, 12, 0, 9, 5, 2, 14,
+          11, 8, 3, 10, 14, 4, 9, 15, 8, 1, 2, 7, 0, 6, 13, 11, 5, 12, 1, 9, 11, 10, 0, 8, 12, 4, 13, 3, 7, 15,
+          14, 5, 6, 2, 4, 0, 5, 9, 7, 12, 2, 10, 14, 1, 3, 8, 11, 6, 15, 13
+        ];
+        const RIPEMD160_R2 = [
+          5, 14, 7, 0, 9, 2, 11, 4, 13, 6, 15, 8, 1, 10, 3, 12, 6, 11, 3, 7, 0, 13, 5, 10, 14, 15, 8, 12, 4, 9,
+          1, 2, 15, 5, 1, 3, 7, 14, 6, 9, 11, 8, 12, 2, 10, 0, 4, 13, 8, 6, 4, 1, 3, 11, 15, 0, 5, 12, 2, 13, 9,
+          7, 10, 14, 12, 15, 10, 4, 1, 5, 8, 7, 6, 2, 13, 14, 0, 3, 9, 11
+        ];
+        const RIPEMD160_S1 = [
+          11, 14, 15, 12, 5, 8, 7, 9, 11, 13, 14, 15, 6, 7, 9, 8, 7, 6, 8, 13, 11, 9, 7, 15, 7, 12, 15, 9, 11, 7,
+          13, 12, 11, 13, 6, 7, 14, 9, 13, 15, 14, 8, 13, 6, 5, 12, 7, 5, 11, 12, 14, 15, 14, 15, 9, 8, 9, 14, 5,
+          6, 8, 6, 5, 12, 9, 15, 5, 11, 6, 8, 13, 12, 5, 12, 13, 14, 11, 8, 5, 6
+        ];
+        const RIPEMD160_S2 = [
+          8, 9, 9, 11, 13, 15, 15, 5, 7, 7, 8, 11, 14, 14, 12, 6, 9, 13, 15, 7, 12, 8, 9, 11, 7, 7, 12, 7, 6, 15,
+          13, 11, 9, 7, 15, 11, 8, 6, 6, 14, 12, 13, 5, 14, 13, 13, 7, 5, 15, 5, 8, 11, 14, 14, 6, 14, 6, 9, 12,
+          9, 12, 5, 15, 8, 8, 5, 12, 9, 12, 5, 14, 6, 8, 13, 6, 5, 15, 13, 11, 11
+        ];
+
+        function rotl32(x, n) {
+          return ((x << n) | (x >>> (32 - n))) >>> 0;
+        }
+
+        function ripemd160(message) {
+          const ml = message.length;
+          const bitLen = BigInt(ml) * 8n;
+          const padLen = ((56 - ((ml + 1) % 64)) + 64) % 64;
+          const padded = new Uint8Array(ml + 1 + padLen + 8);
+          padded.set(message, 0);
+          padded[ml] = 0x80;
+          for (let i = 0; i < 8; i += 1) padded[ml + 1 + padLen + i] = Number((bitLen >> BigInt(i * 8)) & 0xffn);
+
+          let h0 = 0x67452301;
+          let h1 = 0xefcdab89;
+          let h2 = 0x98badcfe;
+          let h3 = 0x10325476;
+          let h4 = 0xc3d2e1f0;
+
+          function f(j, x, y, z) {
+            if (j <= 15) return (x ^ y ^ z) >>> 0;
+            if (j <= 31) return ((x & y) | (~x & z)) >>> 0;
+            if (j <= 47) return ((x | ~y) ^ z) >>> 0;
+            if (j <= 63) return ((x & z) | (y & ~z)) >>> 0;
+            return (x ^ (y | ~z)) >>> 0;
+          }
+
+          function k1(j) {
+            if (j <= 15) return 0x00000000;
+            if (j <= 31) return 0x5a827999;
+            if (j <= 47) return 0x6ed9eba1;
+            if (j <= 63) return 0x8f1bbcdc;
+            return 0xa953fd4e;
+          }
+
+          function k2(j) {
+            if (j <= 15) return 0x50a28be6;
+            if (j <= 31) return 0x5c4dd124;
+            if (j <= 47) return 0x6d703ef3;
+            if (j <= 63) return 0x7a6d76e9;
+            return 0x00000000;
+          }
+
+          for (let offset = 0; offset < padded.length; offset += 64) {
+            const x = new Uint32Array(16);
+            for (let i = 0; i < 16; i += 1) {
+              const j = offset + i * 4;
+              x[i] = (padded[j] | (padded[j + 1] << 8) | (padded[j + 2] << 16) | (padded[j + 3] << 24)) >>> 0;
+            }
+
+            let al = h0;
+            let bl = h1;
+            let cl = h2;
+            let dl = h3;
+            let el = h4;
+
+            let ar = h0;
+            let br = h1;
+            let cr = h2;
+            let dr = h3;
+            let er = h4;
+
+            for (let j = 0; j < 80; j += 1) {
+              const tl = (rotl32((al + f(j, bl, cl, dl) + x[RIPEMD160_R1[j]] + k1(j)) >>> 0, RIPEMD160_S1[j]) + el) >>> 0;
+              al = el;
+              el = dl;
+              dl = rotl32(cl, 10);
+              cl = bl;
+              bl = tl;
+
+              const jr = 79 - j;
+              const tr = (rotl32((ar + f(jr, br, cr, dr) + x[RIPEMD160_R2[j]] + k2(j)) >>> 0, RIPEMD160_S2[j]) + er) >>> 0;
+              ar = er;
+              er = dr;
+              dr = rotl32(cr, 10);
+              cr = br;
+              br = tr;
+            }
+
+            const t = (h1 + cl + dr) >>> 0;
+            h1 = (h2 + dl + er) >>> 0;
+            h2 = (h3 + el + ar) >>> 0;
+            h3 = (h4 + al + br) >>> 0;
+            h4 = (h0 + bl + cr) >>> 0;
+            h0 = t;
+          }
+
+          const out = new Uint8Array(20);
+          const hs = [h0, h1, h2, h3, h4];
+          for (let i = 0; i < hs.length; i += 1) {
+            const v = hs[i];
+            out[i * 4] = v & 0xff;
+            out[i * 4 + 1] = (v >>> 8) & 0xff;
+            out[i * 4 + 2] = (v >>> 16) & 0xff;
+            out[i * 4 + 3] = (v >>> 24) & 0xff;
+          }
+          return out;
+        }
+
+        function hash160(bytes) {
+          return ripemd160(sha256(bytes));
         }
 
         const POPUP_TEXT = {
@@ -434,6 +578,10 @@ if (!CheckECDSASignature(vchSig, pubkey, sighash, checker)) {
           return concatBytes(Uint8Array.of(0x21), pubKey33, Uint8Array.of(0xac));
         }
 
+        function createP2PKHScript(pubKeyHash20) {
+          return concatBytes(Uint8Array.of(0x76, 0xa9, 0x14), pubKeyHash20, Uint8Array.of(0x88, 0xac));
+        }
+
         function segwitScriptPubKey(version, program) {
           if (version < 0 || version > 16) throw new Error("Invalid witness version");
           const ver = version === 0 ? 0x00 : 0x50 + version;
@@ -504,18 +652,50 @@ if (!CheckECDSASignature(vchSig, pubkey, sighash, checker)) {
           return bech32Encode(HRP, words);
         }
 
-        function makeP2WSHFromPrivHex(privHex) {
+        function makeAddressFromPrivHex(privHex, scheme) {
           const pubHex = bd(privHex);
           const pubKey = hexToBytes(pubHex);
+          if (scheme === "p2wpkh") {
+            const pubKeyHash = hash160(pubKey);
+            const witnessProgram = pubKeyHash;
+            const address = segwitAddress(0, witnessProgram);
+            const scriptPubKey = segwitScriptPubKey(0, witnessProgram);
+            const p2pkhScript = createP2PKHScript(pubKeyHash);
+            const scriptCode = concatBytes(varInt(p2pkhScript.length), p2pkhScript);
+            return {
+              scheme,
+              privHex,
+              pubHex,
+              pubKey,
+              pubKeyHash,
+              witnessProgram,
+              scriptPubKey,
+              scriptCode,
+              address
+            };
+          }
+
           const witnessScript = createSingleSigWitnessScript(pubKey);
           const witnessProgram = sha256(witnessScript);
           const address = segwitAddress(0, witnessProgram);
-          return { privHex, pubHex, pubKey, witnessScript, witnessProgram, address };
+          const scriptPubKey = segwitScriptPubKey(0, witnessProgram);
+          const scriptCode = concatBytes(varInt(witnessScript.length), witnessScript);
+          return {
+            scheme,
+            privHex,
+            pubHex,
+            pubKey,
+            witnessScript,
+            witnessProgram,
+            scriptPubKey,
+            scriptCode,
+            address
+          };
         }
 
         function buildTransactionContext(source) {
-          const recipient1 = makeP2WSHFromPrivHex(Kv());
-          const recipient2 = makeP2WSHFromPrivHex(Kv());
+          const recipient1 = makeAddressFromPrivHex(Kv(), source.scheme);
+          const recipient2 = makeAddressFromPrivHex(Kv(), source.scheme);
 
           const inputValue = randomInt(300000, 2500000);
           const fee = randomInt(500, 2500);
@@ -536,12 +716,12 @@ if (!CheckECDSASignature(vchSig, pubkey, sighash, checker)) {
             {
               address: recipient1.address,
               value: BigInt(out1Value),
-              scriptPubKey: segwitScriptPubKey(0, recipient1.witnessProgram)
+              scriptPubKey: recipient1.scriptPubKey
             },
             {
               address: recipient2.address,
               value: BigInt(out2Value),
-              scriptPubKey: segwitScriptPubKey(0, recipient2.witnessProgram)
+              scriptPubKey: recipient2.scriptPubKey
             }
           ];
 
@@ -554,7 +734,7 @@ if (!CheckECDSASignature(vchSig, pubkey, sighash, checker)) {
               prevVout,
               sequence: SEQUENCE_FINAL,
               value: BigInt(inputValue),
-              witnessScript: source.witnessScript
+              scriptCode: source.scriptCode
             },
             outputs,
             fee: BigInt(fee)
@@ -573,7 +753,7 @@ if (!CheckECDSASignature(vchSig, pubkey, sighash, checker)) {
           const outputsSerialized = tx.outputs.map(serializeOutput);
           const hashOutputs = dsha256(concatBytes(...outputsSerialized));
 
-          const scriptCode = concatBytes(varInt(tx.input.witnessScript.length), tx.input.witnessScript);
+          const scriptCode = tx.input.scriptCode;
           const preimage = concatBytes(
             u32le(VERSION),
             hashPrevouts,
@@ -612,13 +792,22 @@ if (!CheckECDSASignature(vchSig, pubkey, sighash, checker)) {
           const derSigHex = Vv(r, s);
           const derSig = hexToBytes(derSigHex);
           const sigWithHashType = concatBytes(derSig, Uint8Array.of(SIGHASH_ALL));
-          const witness = concatBytes(
-            varInt(2),
-            varInt(sigWithHashType.length),
-            sigWithHashType,
-            varInt(tx.input.witnessScript.length),
-            tx.input.witnessScript
-          );
+          const witness =
+            tx.source.scheme === "p2wpkh"
+              ? concatBytes(
+                  varInt(2),
+                  varInt(sigWithHashType.length),
+                  sigWithHashType,
+                  varInt(tx.source.pubKey.length),
+                  tx.source.pubKey
+                )
+              : concatBytes(
+                  varInt(2),
+                  varInt(sigWithHashType.length),
+                  sigWithHashType,
+                  varInt(tx.source.witnessScript.length),
+                  tx.source.witnessScript
+                );
 
           const unsignedNoWitness = serializeUnsignedNoWitness(tx, prepared.outputsSerialized, prepared.outpoint);
           const txIn = concatBytes(prepared.outpoint, Uint8Array.of(0x00), u32le(tx.input.sequence));
@@ -647,9 +836,12 @@ if (!CheckECDSASignature(vchSig, pubkey, sighash, checker)) {
             "4. hashOutputs = dSHA256(all outputs)":
               "How: double-SHA256 of concatenated serialized outputs (value + scriptPubKey).\nValue: " +
               bytesToHex(dsha256(concatBytes(...prepared.outputsSerialized))),
-            "5. scriptCode (varint + witnessScript)":
-              "How: varint(len(witnessScript)) followed by witnessScript bytes for P2WSH signing.\nValue: " +
-              bytesToHex(prepared.scriptCode),
+            "5. scriptCode":
+              tx.source.scheme === "p2wpkh"
+                ? "How: for P2WPKH, scriptCode is varint(25) || OP_DUP OP_HASH160 PUSH20 <pubKeyHash> OP_EQUALVERIFY OP_CHECKSIG.\nValue: " +
+                  bytesToHex(prepared.scriptCode)
+                : "How: for P2WSH, scriptCode is varint(len(witnessScript)) followed by witnessScript bytes.\nValue: " +
+                  bytesToHex(prepared.scriptCode),
             "6. BIP143 preimage":
               "How: nVersion || hashPrevouts || hashSequence || outpoint || scriptCode || amount || nSequence || hashOutputs || nLockTime || sighashType.\nValue: " +
               bytesToHex(prepared.preimage),
@@ -658,9 +850,12 @@ if (!CheckECDSASignature(vchSig, pubkey, sighash, checker)) {
             "9. DER encode and append sighash type":
               "ASN.1 DER encodes (r,s) as INTEGERs in a SEQUENCE, then append 0x01 for SIGHASH_ALL.\nValue: " +
               `${derSigHex}01`,
-            "10. Witness stack [sig+01, witnessScript]":
-              "Witness is serialized as stack-item count (0x02), then varint-len(sig+01)||sig+01, then varint-len(witnessScript)||witnessScript.\nValue: " +
-              bytesToHex(witness),
+            "10. Witness stack":
+              tx.source.scheme === "p2wpkh"
+                ? "Witness is serialized as count(0x02), varint-len(sig+01)||sig+01, varint-len(pubkey)||compressed-pubkey.\nValue: " +
+                  bytesToHex(witness)
+                : "Witness is serialized as count(0x02), varint-len(sig+01)||sig+01, varint-len(witnessScript)||witnessScript.\nValue: " +
+                  bytesToHex(witness),
             "11. Final transaction bytes":
               "version || marker+flag(0001) || vin_count || txin(outpoint+empty scriptSig+sequence) || vout_count || outputs || witness || locktime.\nValue: " +
               bytesToHex(signedTx),
@@ -765,22 +960,31 @@ if (!CheckECDSASignature(vchSig, pubkey, sighash, checker)) {
           const tx = state.tx;
           const sign = state.sign;
           const verify = state.verify;
+          const scheme = state.scheme;
 
           app.innerHTML = `
             <h1>Bitcoin Transaction Preimages Sign/Verify</h1>
             <p class="note">This page signs a real SegWit v0 transaction preimage (BIP143, SIGHASH_ALL) in Bitcoin Core format.</p>
+            <div class="scheme-tabs" role="tablist" aria-label="Address scheme selector">
+              <button id="tab-p2wpkh" class="${scheme === "p2wpkh" ? "active" : ""}" role="tab" aria-selected="${
+            scheme === "p2wpkh"
+          }">P2WPKH</button>
+              <button id="tab-p2wsh" class="${scheme === "p2wsh" ? "active" : ""}" role="tab" aria-selected="${
+            scheme === "p2wsh"
+          }">P2WSH</button>
+            </div>
 
             <section class="panel">
               <h2>1) Key + SegWit Address</h2>
               <div class="row">
-                <button id="btn-key">Generate Keypair + Source Address</button>
+                <button id="btn-key">Generate Keypair + Source Address (${schemeLabel(scheme)})</button>
               </div>
               <div class="kv">
                 ${key ? stepHtml("Private key (hex)", key.privHex) : ""}
                 ${key ? stepHtml("Public key (compressed)", key.pubHex) : ""}
-                ${key ? stepHtml("Source address (P2WSH, bc1...)", key.address) : ""}
+                ${key ? stepHtml(`Source address (${schemeLabel(scheme)}, bc1...)`, key.address) : ""}
                 ${
-                  key
+                  key && scheme === "p2wsh"
                     ? stepHtml(
                         "Witness script",
                         bytesToHex(key.witnessScript),
@@ -789,11 +993,29 @@ if (!CheckECDSASignature(vchSig, pubkey, sighash, checker)) {
                     : ""
                 }
                 ${
-                  key
+                  key && scheme === "p2wsh"
                     ? stepHtml(
                         "Witness program (SHA256(script))",
                         bytesToHex(key.witnessProgram),
                         "Computed as SHA256(witnessScript). For SegWit v0 P2WSH, this 32-byte hash is inserted into scriptPubKey (0x00 0x20 <hash>) and bech32-encoded into the bc1 address."
+                      )
+                    : ""
+                }
+                ${
+                  key && scheme === "p2wpkh"
+                    ? stepHtml(
+                        "Public key hash (HASH160(pubkey))",
+                        bytesToHex(key.pubKeyHash),
+                        "Computed as RIPEMD160(SHA256(compressed public key)). This 20-byte hash is the witness program for P2WPKH."
+                      )
+                    : ""
+                }
+                ${
+                  key && scheme === "p2wpkh"
+                    ? stepHtml(
+                        "Witness program (pubKeyHash)",
+                        bytesToHex(key.witnessProgram),
+                        "For SegWit v0 P2WPKH, scriptPubKey is OP_0 + PUSH20 + pubKeyHash, and the same witness program is bech32-encoded in the bc1 address."
                       )
                     : ""
                 }
@@ -820,7 +1042,9 @@ if (!CheckECDSASignature(vchSig, pubkey, sighash, checker)) {
                     ? stepHtml(
                         "Output #1 scriptPubKey",
                         bytesToHex(tx.outputs[0].scriptPubKey),
-                        "Computed as SegWit v0 P2WSH locking script: OP_0 + PUSH32 + witnessProgram. Here witnessProgram is the 32-byte SHA256 hash of recipient #1 witness script."
+                        scheme === "p2wpkh"
+                          ? "Computed as SegWit v0 P2WPKH locking script: OP_0 + PUSH20 + pubKeyHash of recipient #1."
+                          : "Computed as SegWit v0 P2WSH locking script: OP_0 + PUSH32 + witnessProgram where witnessProgram is SHA256(recipient #1 witnessScript)."
                       )
                     : ""
                 }
@@ -829,7 +1053,9 @@ if (!CheckECDSASignature(vchSig, pubkey, sighash, checker)) {
                     ? stepHtml(
                         "Output #2 scriptPubKey",
                         bytesToHex(tx.outputs[1].scriptPubKey),
-                        "Computed the same way: OP_0 + PUSH32 + witnessProgram for recipient #2. This scriptPubKey commits to the 32-byte witness script hash used by that bc1 address."
+                        scheme === "p2wpkh"
+                          ? "Computed the same way for recipient #2: OP_0 + PUSH20 + pubKeyHash."
+                          : "Computed the same way for recipient #2: OP_0 + PUSH32 + witnessProgram (SHA256 of recipient #2 witnessScript)."
                       )
                     : ""
                 }
@@ -885,8 +1111,37 @@ if (!CheckECDSASignature(vchSig, pubkey, sighash, checker)) {
             }
           `;
 
+          const tabP2wpkh = document.getElementById("tab-p2wpkh");
+          if (tabP2wpkh) {
+            tabP2wpkh.onclick = () => {
+              if (state.scheme !== "p2wpkh") {
+                state.scheme = "p2wpkh";
+                state.key = null;
+                state.tx = null;
+                state.sign = null;
+                state.verify = null;
+                state.modal = null;
+                render();
+              }
+            };
+          }
+          const tabP2wsh = document.getElementById("tab-p2wsh");
+          if (tabP2wsh) {
+            tabP2wsh.onclick = () => {
+              if (state.scheme !== "p2wsh") {
+                state.scheme = "p2wsh";
+                state.key = null;
+                state.tx = null;
+                state.sign = null;
+                state.verify = null;
+                state.modal = null;
+                render();
+              }
+            };
+          }
+
           document.getElementById("btn-key").onclick = () => {
-            state.key = makeP2WSHFromPrivHex(Kv());
+            state.key = makeAddressFromPrivHex(Kv(), state.scheme);
             state.tx = null;
             state.sign = null;
             state.verify = null;
