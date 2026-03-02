@@ -190,7 +190,7 @@
         const BECH32_CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
 
         const state = {
-          scheme: "p2wsh",
+          scheme: "p2wpkh",
           key: null,
           tx: null,
           sign: null,
@@ -1056,6 +1056,15 @@ if (!CheckECDSASignature(vchSig, pubkey, sighash, checker)) {
                         scheme === "p2wpkh"
                           ? "Computed the same way for recipient #2: OP_0 + PUSH20 + pubKeyHash."
                           : "Computed the same way for recipient #2: OP_0 + PUSH32 + witnessProgram (SHA256 of recipient #2 witnessScript)."
+                      )
+                    : ""
+                }
+                ${
+                  tx
+                    ? stepHtml(
+                        "Actual transaction stored in block (hex)",
+                        sign ? bytesToHex(sign.signedTx) : "Available after Step 3 generates the signature and witness.",
+                        "Constructed by concatenating version, marker/flag, inputs, outputs, witness stack, and locktime into one serialized SegWit byte stream. This is the exact record relayed by nodes and stored in blocks."
                       )
                     : ""
                 }
