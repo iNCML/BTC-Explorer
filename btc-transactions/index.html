@@ -257,6 +257,12 @@
           return Wt(bytes);
         }
 
+        function joinHexFields(...parts) {
+          return parts
+            .map(part => (typeof part === "string" ? part : bytesToHex(part)))
+            .join("'");
+        }
+
         function varInt(n) {
           if (!Number.isInteger(n) || n < 0) throw new Error("Invalid varint value");
           if (n < 0xfd) return Uint8Array.of(n);
@@ -785,6 +791,18 @@ if (!CheckECDSASignature(vchSig, pubkey, sighash, checker)) {
         function signTxPreimage(tx) {
           const prepared = buildBip143Preimage(tx);
           const priv = hexToBytes(tx.source.privHex);
+          const versionLE = u32le(VERSION);
+          const locktimeLE = u32le(LOCKTIME);
+          const sighashTypeLE = u32le(SIGHASH_ALL);
+          const markerFlag = Uint8Array.of(0x00, 0x01);
+          const vinCount = varInt(1);
+          const voutCount = varInt(prepared.outputsSerialized.length);
+          const scriptSigLenEmpty = Uint8Array.of(0x00);
+          const sequenceLE = u32le(tx.input.sequence);
+          const inputAmountLE = u64le(tx.input.value);
+          const outpointTxidLE = reverseBytes(tx.input.prevTxid);
+          const outpointVoutLE = u32le(tx.input.prevVout);
+
           const compactSig = pv(prepared.sighash, priv, { format: "compact", lowS: true, prehash: false });
           const r = bytesToBigInt(compactSig.slice(0, 32));
           const s = bytesToBigInt(compactSig.slice(32));
@@ -792,41 +810,76 @@ if (!CheckECDSASignature(vchSig, pubkey, sighash, checker)) {
           const derSigHex = Vv(r, s);
           const derSig = hexToBytes(derSigHex);
           const sigWithHashType = concatBytes(derSig, Uint8Array.of(SIGHASH_ALL));
+          const sigLen = varInt(sigWithHashType.length);
+          const witnessItem2 = tx.source.scheme === "p2wpkh" ? tx.source.pubKey : tx.source.witnessScript;
+          const witnessItem2Len = varInt(witnessItem2.length);
           const witness =
             tx.source.scheme === "p2wpkh"
               ? concatBytes(
                   varInt(2),
-                  varInt(sigWithHashType.length),
+                  sigLen,
                   sigWithHashType,
-                  varInt(tx.source.pubKey.length),
-                  tx.source.pubKey
+                  witnessItem2Len,
+                  witnessItem2
                 )
               : concatBytes(
                   varInt(2),
-                  varInt(sigWithHashType.length),
+                  sigLen,
                   sigWithHashType,
-                  varInt(tx.source.witnessScript.length),
-                  tx.source.witnessScript
+                  witnessItem2Len,
+                  witnessItem2
                 );
 
           const unsignedNoWitness = serializeUnsignedNoWitness(tx, prepared.outputsSerialized, prepared.outpoint);
-          const txIn = concatBytes(prepared.outpoint, Uint8Array.of(0x00), u32le(tx.input.sequence));
+          const txIn = concatBytes(prepared.outpoint, scriptSigLenEmpty, sequenceLE);
           const signedTx = concatBytes(
-            u32le(VERSION),
-            Uint8Array.of(0x00, 0x01),
-            varInt(1),
+            versionLE,
+            markerFlag,
+            vinCount,
             txIn,
-            varInt(prepared.outputsSerialized.length),
+            voutCount,
             ...prepared.outputsSerialized,
             witness,
-            u32le(LOCKTIME)
+            locktimeLE
           );
           const txid = reverseBytes(dsha256(unsignedNoWitness));
           const wtxid = reverseBytes(dsha256(signedTx));
+
+          const scriptBody = tx.source.scheme === "p2wpkh" ? createP2PKHScript(tx.source.pubKeyHash) : tx.source.witnessScript;
+          const scriptLen = varInt(scriptBody.length);
+          const formattedOutpoint = joinHexFields(outpointTxidLE, outpointVoutLE);
+          const formattedScriptCode = joinHexFields(scriptLen, scriptBody);
+          const formattedPreimage = joinHexFields(
+            versionLE,
+            dsha256(prepared.outpoint),
+            dsha256(sequenceLE),
+            prepared.outpoint,
+            prepared.scriptCode,
+            inputAmountLE,
+            sequenceLE,
+            dsha256(concatBytes(...prepared.outputsSerialized)),
+            locktimeLE,
+            sighashTypeLE
+          );
+          const formattedDerAndType = joinHexFields(derSig, Uint8Array.of(SIGHASH_ALL));
+          const formattedWitness = joinHexFields(varInt(2), sigLen, sigWithHashType, witnessItem2Len, witnessItem2);
+          const formattedTxIn = joinHexFields(prepared.outpoint, scriptSigLenEmpty, sequenceLE);
+          const formattedOutputs = tx.outputs.map(o => joinHexFields(u64le(o.value), varInt(o.scriptPubKey.length), o.scriptPubKey));
+          const formattedFinalTx = joinHexFields(
+            bytesToHex(versionLE),
+            bytesToHex(markerFlag),
+            bytesToHex(vinCount),
+            formattedTxIn,
+            bytesToHex(voutCount),
+            ...formattedOutputs,
+            formattedWitness,
+            bytesToHex(locktimeLE)
+          );
+          const formattedTxidWtxid = joinHexFields(txid, wtxid);
+
           const signSteps = {
             "1. Outpoint serialization":
-              "How: outpoint = little-endian prevTxid (32B) || little-endian vout (4B).\nValue: " +
-              bytesToHex(prepared.outpoint),
+              "How: outpoint = little-endian prevTxid (32B) || little-endian vout (4B).\nValue: " + formattedOutpoint,
             "2. hashPrevouts = dSHA256(outpoint list)":
               "How: double-SHA256 of concatenated outpoints for all inputs (one input here).\nValue: " +
               bytesToHex(dsha256(prepared.outpoint)),
@@ -839,29 +892,29 @@ if (!CheckECDSASignature(vchSig, pubkey, sighash, checker)) {
             "5. scriptCode":
               tx.source.scheme === "p2wpkh"
                 ? "How: for P2WPKH, scriptCode is varint(25) || OP_DUP OP_HASH160 PUSH20 <pubKeyHash> OP_EQUALVERIFY OP_CHECKSIG.\nValue: " +
-                  bytesToHex(prepared.scriptCode)
+                  formattedScriptCode
                 : "How: for P2WSH, scriptCode is varint(len(witnessScript)) followed by witnessScript bytes.\nValue: " +
-                  bytesToHex(prepared.scriptCode),
+                  formattedScriptCode,
             "6. BIP143 preimage":
               "How: nVersion || hashPrevouts || hashSequence || outpoint || scriptCode || amount || nSequence || hashOutputs || nLockTime || sighashType.\nValue: " +
-              bytesToHex(prepared.preimage),
+              formattedPreimage,
             "7. z = dSHA256(preimage)": "0x" + z.toString(16),
             "8. ECDSA sign z with private key d": `r=0x${hex64(r)}\ns=0x${hex64(s)}\nlow-S=${s <= CURVE_N / 2n}`,
             "9. DER encode and append sighash type":
               "ASN.1 DER encodes (r,s) as INTEGERs in a SEQUENCE, then append 0x01 for SIGHASH_ALL.\nValue: " +
-              `${derSigHex}01`,
+              formattedDerAndType,
             "10. Witness stack":
               tx.source.scheme === "p2wpkh"
                 ? "Witness is serialized as count(0x02), varint-len(sig+01)||sig+01, varint-len(pubkey)||compressed-pubkey.\nValue: " +
-                  bytesToHex(witness)
+                  formattedWitness
                 : "Witness is serialized as count(0x02), varint-len(sig+01)||sig+01, varint-len(witnessScript)||witnessScript.\nValue: " +
-                  bytesToHex(witness),
+                  formattedWitness,
             "11. Final transaction bytes":
               "version || marker+flag(0001) || vin_count || txin(outpoint+empty scriptSig+sequence) || vout_count || outputs || witness || locktime.\nValue: " +
-              bytesToHex(signedTx),
+              formattedFinalTx,
             "12. txid / wtxid":
               "txid = reverse(dSHA256(unsigned_tx_without_witness)); wtxid = reverse(dSHA256(full_segwit_tx_with_witness)).\nValue: " +
-              `txid=${bytesToHex(txid)}\nwtxid=${bytesToHex(wtxid)}`
+              `txid=${bytesToHex(txid)}'wtxid=${bytesToHex(wtxid)}`
           };
 
           return {
@@ -877,6 +930,15 @@ if (!CheckECDSASignature(vchSig, pubkey, sighash, checker)) {
             signedTx,
             txid,
             wtxid,
+            formatted: {
+              outpoint: formattedOutpoint,
+              scriptCode: formattedScriptCode,
+              preimage: formattedPreimage,
+              derAndType: formattedDerAndType,
+              witness: formattedWitness,
+              finalTx: formattedFinalTx,
+              txidWtxid: formattedTxidWtxid
+            },
             signSteps
           };
         }
@@ -1063,7 +1125,7 @@ if (!CheckECDSASignature(vchSig, pubkey, sighash, checker)) {
                   tx
                     ? stepHtml(
                         "Actual transaction stored in block (hex)",
-                        sign ? bytesToHex(sign.signedTx) : "Available after Step 3 generates the signature and witness.",
+                        sign ? sign.formatted.finalTx : "Available after Step 3 generates the signature and witness.",
                         "Constructed by concatenating version, marker/flag, inputs, outputs, witness stack, and locktime into one serialized SegWit byte stream. This is the exact record relayed by nodes and stored in blocks."
                       )
                     : ""
