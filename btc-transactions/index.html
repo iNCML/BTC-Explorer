@@ -909,8 +909,8 @@ if (!CheckECDSASignature(vchSig, pubkey, sighash, checker)) {
                   formattedWitness
                 : "Witness is serialized as count(0x02), varint-len(sig+01)||sig+01, varint-len(witnessScript)||witnessScript.\nValue: " +
                   formattedWitness,
-            "11. Final transaction bytes":
-              "version || marker+flag(0001) || vin_count || txin(outpoint+empty scriptSig+sequence) || vout_count || outputs || witness || locktime.\nValue: " +
+            "11. Actual Transaction Record Stored in Blocks":
+              "version || marker+flag(0001) || vin_count || txin(outpoint+empty scriptSig+sequence) || vout_count || outputs {1 output=value||script_length||scriptPubKey} || witness || locktime.\nValue: " +
               formattedFinalTx,
             "12. txid / wtxid":
               "txid = reverse(dSHA256(unsigned_tx_without_witness)); wtxid = reverse(dSHA256(full_segwit_tx_with_witness)).\nValue: " +
@@ -1118,15 +1118,6 @@ if (!CheckECDSASignature(vchSig, pubkey, sighash, checker)) {
                         scheme === "p2wpkh"
                           ? "Computed the same way for recipient #2: OP_0 + PUSH20 + pubKeyHash."
                           : "Computed the same way for recipient #2: OP_0 + PUSH32 + witnessProgram (SHA256 of recipient #2 witnessScript)."
-                      )
-                    : ""
-                }
-                ${
-                  tx
-                    ? stepHtml(
-                        "Actual transaction stored in block (hex)",
-                        sign ? sign.formatted.finalTx : "Available after Step 3 generates the signature and witness.",
-                        "Constructed by concatenating version, marker/flag, inputs, outputs, witness stack, and locktime into one serialized SegWit byte stream. This is the exact record relayed by nodes and stored in blocks."
                       )
                     : ""
                 }
