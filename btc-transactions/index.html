@@ -884,7 +884,7 @@ if (!CheckECDSASignature(vchSig, pubkey, sighash, checker)) {
               "How: double-SHA256 of concatenated outpoints for all inputs (one input here).\nValue: " +
               bytesToHex(dsha256(prepared.outpoint)),
             "3. hashSequence = dSHA256(sequence list)":
-              "How: double-SHA256 of all input sequence fields in little-endian.\nValue: " +
+              "How: double-SHA256 of all input sequence fields in little-endian, usually use sequence 0xFFFFFFFF.\nValue: " +
               bytesToHex(dsha256(u32le(tx.input.sequence))),
             "4. hashOutputs = dSHA256(all outputs)":
               "How: double-SHA256 of concatenated serialized outputs (value + scriptPubKey).\nValue: " +
@@ -1068,7 +1068,7 @@ if (!CheckECDSASignature(vchSig, pubkey, sighash, checker)) {
                     ? stepHtml(
                         "Public key hash (HASH160(pubkey))",
                         bytesToHex(key.pubKeyHash),
-                        "Computed as RIPEMD160(SHA256(compressed public key)). This 20-byte hash is the witness program for P2WPKH."
+                        "RIPEMD160(SHA256(compressed public key), derived from P2WPKH address by reversing Bech32 encodes."
                       )
                     : ""
                 }
@@ -1076,8 +1076,8 @@ if (!CheckECDSASignature(vchSig, pubkey, sighash, checker)) {
                   key && scheme === "p2wpkh"
                     ? stepHtml(
                         "Witness program (pubKeyHash)",
-                        bytesToHex(key.witnessProgram),
-                        "For SegWit v0 P2WPKH, scriptPubKey is OP_0 + PUSH20 + pubKeyHash, and the same witness program is bech32-encoded in the bc1 address."
+                        `00'14'${bytesToHex(key.witnessProgram)}`,
+                        "Shown with field separators as OP_0'PUSH20'pubKeyHash. This matches SegWit v0 P2WPKH scriptPubKey structure."
                       )
                     : ""
                 }
@@ -1103,7 +1103,11 @@ if (!CheckECDSASignature(vchSig, pubkey, sighash, checker)) {
                   tx
                     ? stepHtml(
                         "Output #1 scriptPubKey",
-                        bytesToHex(tx.outputs[0].scriptPubKey),
+                        joinHexFields(
+                          Uint8Array.of(0x00),
+                          Uint8Array.of(tx.recipients[0].witnessProgram.length),
+                          tx.recipients[0].witnessProgram
+                        ),
                         scheme === "p2wpkh"
                           ? "Computed as SegWit v0 P2WPKH locking script: OP_0 + PUSH20 + pubKeyHash of recipient #1."
                           : "Computed as SegWit v0 P2WSH locking script: OP_0 + PUSH32 + witnessProgram where witnessProgram is SHA256(recipient #1 witnessScript)."
@@ -1114,7 +1118,11 @@ if (!CheckECDSASignature(vchSig, pubkey, sighash, checker)) {
                   tx
                     ? stepHtml(
                         "Output #2 scriptPubKey",
-                        bytesToHex(tx.outputs[1].scriptPubKey),
+                        joinHexFields(
+                          Uint8Array.of(0x00),
+                          Uint8Array.of(tx.recipients[1].witnessProgram.length),
+                          tx.recipients[1].witnessProgram
+                        ),
                         scheme === "p2wpkh"
                           ? "Computed the same way for recipient #2: OP_0 + PUSH20 + pubKeyHash."
                           : "Computed the same way for recipient #2: OP_0 + PUSH32 + witnessProgram (SHA256 of recipient #2 witnessScript)."
