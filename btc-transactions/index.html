@@ -876,6 +876,23 @@ if (!CheckECDSASignature(vchSig, pubkey, sighash, checker)) {
             bytesToHex(locktimeLE)
           );
           const formattedTxidWtxid = joinHexFields(txid, wtxid);
+          const formattedScriptCodeDetailed =
+            tx.source.scheme === "p2wpkh"
+              ? joinHexFields(
+                  scriptLen,
+                  Uint8Array.of(0x76),
+                  Uint8Array.of(0xa9),
+                  Uint8Array.of(0x14),
+                  tx.source.pubKeyHash,
+                  Uint8Array.of(0x88),
+                  Uint8Array.of(0xac)
+                )
+              : joinHexFields(
+                  scriptLen,
+                  Uint8Array.of(tx.source.witnessScript[0]),
+                  tx.source.pubKey,
+                  Uint8Array.of(tx.source.witnessScript[tx.source.witnessScript.length - 1])
+                );
 
           const signSteps = {
             "1. Outpoint serialization":
@@ -891,10 +908,10 @@ if (!CheckECDSASignature(vchSig, pubkey, sighash, checker)) {
               bytesToHex(dsha256(concatBytes(...prepared.outputsSerialized))),
             "5. scriptCode":
               tx.source.scheme === "p2wpkh"
-                ? "How: for P2WPKH, scriptCode is varint(25) || OP_DUP OP_HASH160 PUSH20 <pubKeyHash> OP_EQUALVERIFY OP_CHECKSIG.\nValue: " +
-                  formattedScriptCode
-                : "How: for P2WSH, scriptCode is varint(len(witnessScript)) followed by witnessScript bytes.\nValue: " +
-                  formattedScriptCode,
+                ? "How: for P2WPKH, scriptCode is varint(25) || OP_DUP || OP_HASH160 || PUSH20 || <pubKeyHash> || OP_EQUALVERIFY || OP_CHECKSIG.\nValue: " +
+                  formattedScriptCodeDetailed
+                : "How: for P2WSH, scriptCode is varint(len(witnessScript)) || PUSH33 || <compressed_pubkey> || OP_CHECKSIG.\nValue: " +
+                  formattedScriptCodeDetailed,
             "6. BIP143 preimage":
               "How: nVersion || hashPrevouts || hashSequence || outpoint || scriptCode || amount || nSequence || hashOutputs || nLockTime || sighashType.\nValue: " +
               formattedPreimage,
@@ -913,7 +930,7 @@ if (!CheckECDSASignature(vchSig, pubkey, sighash, checker)) {
               "version || marker+flag(0001) || vin_count || txin(outpoint+empty scriptSig+sequence) || vout_count || outputs {1 output=value||script_length||scriptPubKey} || witness || locktime.\nValue: " +
               formattedFinalTx,
             "12. txid / wtxid":
-              "txid = reverse(dSHA256(unsigned_tx_without_witness)); wtxid = reverse(dSHA256(full_segwit_tx_with_witness)).\nValue: " +
+              "txid = reverse(dSHA256(tx_without_witness)); wtxid = reverse(dSHA256(full_segwit_tx_with_witness)).\nValue: " +
               `txid=${bytesToHex(txid)}'wtxid=${bytesToHex(wtxid)}`
           };
 
@@ -932,7 +949,7 @@ if (!CheckECDSASignature(vchSig, pubkey, sighash, checker)) {
             wtxid,
             formatted: {
               outpoint: formattedOutpoint,
-              scriptCode: formattedScriptCode,
+              scriptCode: formattedScriptCodeDetailed,
               preimage: formattedPreimage,
               derAndType: formattedDerAndType,
               witness: formattedWitness,
@@ -973,12 +990,14 @@ if (!CheckECDSASignature(vchSig, pubkey, sighash, checker)) {
           });
           const ok = xMatch === null ? libOk : libOk && xMatch;
           const verifySteps = {
-            "1. Parse signature (r,s) and range-check": `r=0x${hex64(r)}\ns=0x${hex64(s)}\nrange_ok=${rangeOk}`,
-            "2. Recompute z = dSHA256(BIP143 preimage)": "0x" + z.toString(16),
+            "1. Parse signature (r,s) from the witness in the transaction record, and range-check": `r=0x${hex64(r)}\ns=0x${hex64(s)}\nrange_ok=${rangeOk}`,
+            "2. Recompute the preimage and z = dSHA256(preimage)": `preimage=${signData.formatted ? signData.formatted.preimage : bytesToHex(signData.preimage)}\nz=0x${z.toString(
+              16
+            )}`,
             "3. Compute w = s^-1 mod n": "0x" + w.toString(16),
             "4. Compute u1 = z*w mod n": "0x" + u1.toString(16),
             "5. Compute u2 = r*w mod n": "0x" + u2.toString(16),
-            "6. Point equation P = u1*G + u2*Q": pointCheck,
+            "6. Retrieve public key Q from witness; and use point equation P = u1*G + u2*Q": pointCheck,
             "7. Library verify(check against z and pubkey)": String(libOk),
             "8. Final verification result": String(ok)
           };
@@ -1147,6 +1166,7 @@ if (!CheckECDSASignature(vchSig, pubkey, sighash, checker)) {
 
             <section class="panel">
               <h2>4) Verify Signature</h2>
+              <p class="k-note">The only input is a raw transaction record, from which the tx preimage is recomputed by the verifiers.</p>
               <div class="row">
                 <button id="btn-verify" ${sign ? "" : "disabled"}>Verify Against Sighash</button>
                 <div class="step-links">
