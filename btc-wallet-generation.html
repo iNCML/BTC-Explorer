@@ -437,16 +437,16 @@
 
     <section class="step" id="step6">
       <div class="step-head">
-        <h2 class="step-title">Step 6: Derive Addresses from Wallet Public Key (xpub)</h2>
+        <h2 class="step-title">Step 6: Derive Addresses from Wallet Public Key (xpub/zpub)</h2>
         <div class="step-tools">
-          <input id="walletPubInput" class="inline-input xpub-input" placeholder="Wallet public key (xpub) from Step 5; editable" />
+          <input id="walletPubInput" class="inline-input xpub-input" placeholder="Wallet public key (xpub/zpub) from Step 5; editable" />
           <button class="run-btn" id="runStep6">Run Step 6</button>
           <button class="mini-link" data-step="step6" data-type="algorithm">algorithm</button>
           <button class="mini-link" data-step="step6" data-type="python">python</button>
           <button class="mini-link" data-step="step6" data-type="code">code</button>
         </div>
       </div>
-      <p class="step-note">Copy the wallet public key from Step 5 into the editable box (supports both <span class="mono">xpub</span> and <span class="mono">zpub</span>), then derive addresses using public derivation only. Step-by-step details are shown for the first address, followed by three more addresses.</p>
+      <p class="step-note">Copy the wallet public key from Step 5 into the editable box (supports <span class="mono">xpub/zpub</span>), then derive addresses using public derivation only. Step-by-step details are shown for the first address, followed by the first three addresses table.</p>
       <div id="step6Result"></div>
       <div class="status" id="step6Status"></div>
     </section>
@@ -736,7 +736,7 @@ print(fmt + ":", extpub)`,
 input: account extended public key (xpub or zpub) at m/84'/0'/0'
 decode Base58Check -> 78-byte payload
 parse fields: version, depth, parent fingerprint, child number, chain code, key data
-normalize payload to xpub version for generic CKDpub libraries
+normalize payload to xpub/zpub-compatible version for generic CKDpub libraries
 
 CKDpub for external chain:
   m/0 : data = parent_pubkey || index(0)
@@ -755,7 +755,7 @@ import hmac, hashlib
 from bip32utils import BIP32Key
 import bech32
 
-extpub = "<account_xpub_or_zpub>"
+extpub = "<account_xpub/zpub>"
 acct = BIP32Key.fromExtendedKey(extpub)   # public only
 external = acct.ChildKey(0)             # m/.../0
 
@@ -1146,7 +1146,7 @@ for i in [1, 2, 3]:
       if (versionHex === toHex(XPUB_VERSION)) inputFormat = "xpub";
       if (versionHex === toHex(ZPUB_VERSION)) inputFormat = "zpub";
       if (!inputFormat) {
-        throw new Error(`Unsupported public key prefix/version: ${versionHex}. Use xpub or zpub.`);
+        throw new Error(`Unsupported public key prefix/version: ${versionHex}. Use xpub/zpub.`);
       }
 
       const payloadAsXpub = concatBytes(XPUB_VERSION, payload.slice(4));
@@ -1526,7 +1526,7 @@ for i in [1, 2, 3]:
       const firstBlock = [
         `wallet_public_key_input = ${d.inputExtpub}`,
         `input_format = ${d.inputFormat}`,
-        `normalized_xpub_for_derivation = ${d.normalizedXpub}`,
+        `normalized_xpub/zpub_for_derivation = ${d.normalizedXpub}`,
         `decoded_public_key_bytes = Base58Decode(input) = ${d.decodedHex}`,
         `payload_78bytes = ${d.payloadHex}`,
         `checksum(embedded) = ${d.checksumHex}`,
@@ -1593,6 +1593,7 @@ for i in [1, 2, 3]:
             <thead><tr><th>index</th><th>path</th><th>compressed pubkey</th><th>witness program (HASH160)</th><th>address</th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
+          <p class="result-note">Verify that these addresses should be identical to what were computed in Step 3.</p>
         </div>
       `;
     }
@@ -1766,7 +1767,7 @@ for i in [1, 2, 3]:
     async function runStep6() {
       const xpubText = (walletPubInput && walletPubInput.value ? walletPubInput.value : "").trim();
       if (!xpubText) {
-        setStatus(step6Status, "Paste or generate wallet public key (xpub) first.");
+        setStatus(step6Status, "Paste or generate wallet public key (xpub/zpub) first.");
         return;
       }
       setStatus(step6Status, "Deriving addresses from wallet public key...");
@@ -1777,7 +1778,7 @@ for i in [1, 2, 3]:
       } catch (err) {
         state.xpubAddressDetails = null;
         step6Result.innerHTML = "";
-        const msg = err && err.message ? err.message : "Invalid wallet public key (xpub).";
+        const msg = err && err.message ? err.message : "Invalid wallet public key (xpub/zpub).";
         setStatus(step6Status, `Step 6 failed: ${msg}`);
       }
     }
