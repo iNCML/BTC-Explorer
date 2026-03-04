@@ -194,6 +194,13 @@
       min-width: 230px;
     }
 
+    .xpub-input {
+      min-width: 420px;
+      width: min(820px, 100%);
+      font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+      font-size: 0.8rem;
+    }
+
     .mnemonic-input {
       width: 100%;
       min-height: 88px;
@@ -350,7 +357,7 @@
           <button class="mini-link" data-step="step2" data-type="code">code</button>
         </div>
       </div>
-      <p class="step-note">Use password = mnemonic (NFKD) and salt = "mnemonic" + passphrase (NFKD). NFKD is Unicode normalization so equivalent text maps to consistent bytes; <span class="mono">c</span> is the PBKDF2 iteration count (2048); <span class="mono">dkLen</span> is the derived-key output length (64 bytes).</p>
+      <p class="step-note">Use password = mnemonic (NFKD) and salt = "mnemonic" + passphrase (NFKD). NFKD is Unicode normalization so equivalent text maps to consistent bytes; <span class="mono">c</span> is the PBKDF2 iteration count (2048); <span class="mono">dkLen</span> is the derived-key output length (64 bytes). HMAC_SHA512(key,m) is a Message Authentication Code (MAC) constructed using the cryptographic hash function SHA-512 together with a secret key.</p>
       <div id="step2Result"></div>
       <div class="status" id="step2Status"></div>
     </section>
@@ -399,6 +406,22 @@
       <div id="step5Result"></div>
       <div class="status" id="step5Status"></div>
     </section>
+
+    <section class="step" id="step6">
+      <div class="step-head">
+        <h2 class="step-title">Step 6: Derive Addresses from Wallet Public Key (xpub)</h2>
+        <div class="step-tools">
+          <input id="walletPubInput" class="inline-input xpub-input" placeholder="Wallet public key (xpub) from Step 5; editable" />
+          <button class="run-btn" id="runStep6">Run Step 6</button>
+          <button class="mini-link" data-step="step6" data-type="algorithm">algorithm</button>
+          <button class="mini-link" data-step="step6" data-type="python">python</button>
+          <button class="mini-link" data-step="step6" data-type="code">code</button>
+        </div>
+      </div>
+      <p class="step-note">Copy the xpub from Step 5 into the editable box (or modify it), then derive addresses using public derivation only. Step-by-step details are shown for the first address, followed by three more addresses.</p>
+      <div id="step6Result"></div>
+      <div class="status" id="step6Status"></div>
+    </section>
   </main>
 
   <div class="modal hidden" id="popup" role="dialog" aria-modal="true" aria-labelledby="popupTitle">
@@ -438,6 +461,7 @@
       firstChildDetails: null,
       firstGrandchildDetails: null,
       xpubDetails: null,
+      xpubAddressDetails: null,
       children: [],
       grandchildren: []
     };
@@ -672,6 +696,55 @@ print("xpub:", xpub)`,
 //
 // Base58Check encoding is then applied by key-encoding utilities
 // (version/prefix depends on network and key type).`
+      },
+      step6: {
+        algorithm: `Derive Addresses from xpub (Public Derivation Only)
+
+input: account xpub at m/84'/0'/0'
+decode Base58Check -> 78-byte extended key payload
+parse fields: version, depth, parent fingerprint, child number, chain code, key data
+
+CKDpub for external chain:
+  m/0 : data = parent_pubkey || index(0)
+        I = HMAC_SHA512(parent_chain_code, data), split IL/IR
+        child_pubkey = point(parse256(IL)) + parent_pubkey
+        child_chain = IR
+
+CKDpub for first address:
+  m/0/0 with same formula
+  witness_program = HASH160(compressed_pubkey)
+  address = Bech32("bc", v0, witness_program)
+
+repeat m/0/1, m/0/2, m/0/3 for 3 more addresses`,
+        python: `# Step 6 - Derive addresses from account xpub
+import hmac, hashlib
+from bip32utils import BIP32Key
+import bech32
+
+xpub = "<account_xpub>"
+acct = BIP32Key.fromExtendedKey(xpub)   # public only
+external = acct.ChildKey(0)             # m/.../0
+
+def to_p2wpkh(pubkey33: bytes) -> str:
+    h160 = hashlib.new("ripemd160", hashlib.sha256(pubkey33).digest()).digest()
+    words = bech32.convertbits(h160, 8, 5)
+    return bech32.bech32_encode("bc", [0] + words)
+
+first = external.ChildKey(0)            # m/.../0/0
+print("first:", to_p2wpkh(first.PublicKey()))
+
+for i in [1, 2, 3]:
+    node = external.ChildKey(i)
+    print(i, to_p2wpkh(node.PublicKey()))`,
+        code: `// Bitcoin Core concept for Step 6:
+// CExtPubKey supports non-hardened child derivation only (CKDpub).
+// Hardened paths require private key; public derivation uses:
+//   data = serP(pubkey) || ser32(index)
+//   I = HMAC-SHA512(chaincode, data)
+//   child_pub = parse256(IL)*G + parent_pub
+//   child_chain = IR
+//
+// Address encoding to Bech32 segwit v0 is then done from HASH160(pubkey).`
       }
     };
 
@@ -680,21 +753,25 @@ print("xpub:", xpub)`,
     const runStep3Btn = document.getElementById("runStep3");
     const runStep4Btn = document.getElementById("runStep4");
     const runStep5Btn = document.getElementById("runStep5");
+    const runStep6Btn = document.getElementById("runStep6");
 
     const step1Result = document.getElementById("step1Result");
     const step2Result = document.getElementById("step2Result");
     const step3Result = document.getElementById("step3Result");
     const step4Result = document.getElementById("step4Result");
     const step5Result = document.getElementById("step5Result");
+    const step6Result = document.getElementById("step6Result");
 
     const step1Status = document.getElementById("step1Status");
     const step2Status = document.getElementById("step2Status");
     const step3Status = document.getElementById("step3Status");
     const step4Status = document.getElementById("step4Status");
     const step5Status = document.getElementById("step5Status");
+    const step6Status = document.getElementById("step6Status");
 
     const entropyBitsSelect = document.getElementById("entropyBits");
     const passphraseInput = document.getElementById("passphrase");
+    const walletPubInput = document.getElementById("walletPubInput");
 
     const popup = document.getElementById("popup");
     const popupTitle = document.getElementById("popupTitle");
@@ -792,6 +869,37 @@ print("xpub:", xpub)`,
         }
       }
       return `${"1".repeat(leading)}${out || "1"}`;
+    }
+
+    function equalBytes(a, b) {
+      if (a.length !== b.length) return false;
+      for (let i = 0; i < a.length; i += 1) {
+        if (a[i] !== b[i]) return false;
+      }
+      return true;
+    }
+
+    function base58Decode(text) {
+      const alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+      const map = new Map(Array.from(alphabet).map((ch, i) => [ch, i]));
+      let x = 0n;
+      for (const ch of text) {
+        const n = map.get(ch);
+        if (n === undefined) throw new Error(`Invalid Base58 character: ${ch}`);
+        x = x * 58n + BigInt(n);
+      }
+      const bytes = [];
+      while (x > 0n) {
+        bytes.push(Number(x & 0xffn));
+        x >>= 8n;
+      }
+      bytes.reverse();
+      let leading = 0;
+      for (const ch of text) {
+        if (ch === "1") leading += 1;
+        else break;
+      }
+      return new Uint8Array([...new Uint8Array(leading), ...bytes]);
     }
 
     function buildFirstChildDetails(root, seedBytes) {
@@ -951,6 +1059,88 @@ print("xpub:", xpub)`,
       };
     }
 
+    function buildAddressDetailsFromXpub(xpubText) {
+      const xpub = xpubText.trim();
+      const decoded = base58Decode(xpub);
+      if (decoded.length !== 82) {
+        throw new Error(`Decoded xpub length is ${decoded.length} bytes (expected 82).`);
+      }
+      const payload = decoded.slice(0, 78);
+      const checksum = decoded.slice(78);
+      const checksumCalc = doubleSha256(payload).slice(0, 4);
+      if (!equalBytes(checksum, checksumCalc)) {
+        throw new Error("Base58Check checksum mismatch for wallet public key.");
+      }
+
+      const version = payload.slice(0, 4);
+      const depth = payload.slice(4, 5);
+      const parentFingerprint = payload.slice(5, 9);
+      const childNumber = payload.slice(9, 13);
+      const chainCode = payload.slice(13, 45);
+      const keyData = payload.slice(45, 78);
+
+      const accountNode = HDKey.fromExtendedKey(xpub);
+      const externalNode = accountNode.deriveChild(0);
+      const firstNode = externalNode.deriveChild(0);
+
+      const idx0 = indexTo4BytesBE(0);
+      const dataExternal = concatBytes(accountNode.publicKey, idx0);
+      const iExternal = hmac(sha512, accountNode.chainCode, dataExternal);
+      const ilExternal = iExternal.slice(0, 32);
+      const irExternal = iExternal.slice(32);
+
+      const dataFirst = concatBytes(externalNode.publicKey, idx0);
+      const iFirst = hmac(sha512, externalNode.chainCode, dataFirst);
+      const ilFirst = iFirst.slice(0, 32);
+      const irFirst = iFirst.slice(32);
+
+      const firstAddr = pubkeyToP2WPKH(firstNode.publicKey);
+      const more = [1, 2, 3].map(i => {
+        const node = externalNode.deriveChild(i);
+        const addr = pubkeyToP2WPKH(node.publicKey);
+        return {
+          index: i,
+          path: `m/0/${i}`,
+          pubkeyHex: toHex(node.publicKey),
+          programHex: addr.programHex,
+          address: addr.address
+        };
+      });
+
+      return {
+        xpub,
+        decodedHex: toHex(decoded),
+        payloadHex: toHex(payload),
+        checksumHex: toHex(checksum),
+        checksumCalcHex: toHex(checksumCalc),
+        versionHex: toHex(version),
+        depthHex: toHex(depth),
+        parentFingerprintHex: toHex(parentFingerprint),
+        childNumberHex: toHex(childNumber),
+        chainCodeHex: toHex(chainCode),
+        keyDataHex: toHex(keyData),
+        accountPubHex: toHex(accountNode.publicKey),
+        accountChainHex: toHex(accountNode.chainCode),
+        externalDataHex: toHex(dataExternal),
+        externalIHex: toHex(iExternal),
+        externalILHex: toHex(ilExternal),
+        externalIRHex: toHex(irExternal),
+        externalPubHex: toHex(externalNode.publicKey),
+        externalChainHex: toHex(externalNode.chainCode),
+        externalChainMatch: toHex(irExternal) === toHex(externalNode.chainCode),
+        firstDataHex: toHex(dataFirst),
+        firstIHex: toHex(iFirst),
+        firstILHex: toHex(ilFirst),
+        firstIRHex: toHex(irFirst),
+        firstPubHex: toHex(firstNode.publicKey),
+        firstChainHex: toHex(firstNode.chainCode),
+        firstChainMatch: toHex(irFirst) === toHex(firstNode.chainCode),
+        firstProgramHex: firstAddr.programHex,
+        firstAddress: firstAddr.address,
+        more
+      };
+    }
+
     function bytesToBits(bytes) {
       return Array.from(bytes, b => b.toString(2).padStart(8, "0")).join("");
     }
@@ -986,11 +1176,13 @@ print("xpub:", xpub)`,
       const u1Hex = toHex(u);
       let u2Hex = "";
       let u3Hex = "";
+      let ucHex = u1Hex;
       const lines = [`U0001 = HMAC_SHA512(P, S || INT_32_BE(1)) = ${u1Hex}`];
       for (let i = 2; i <= rounds; i += 1) {
         u = hmac(sha512, passwordBytes, u);
         if (i === 2) u2Hex = toHex(u);
         if (i === 3) u3Hex = toHex(u);
+        if (i === rounds) ucHex = toHex(u);
         for (let j = 0; j < t.length; j += 1) {
           t[j] ^= u[j];
         }
@@ -1005,6 +1197,7 @@ print("xpub:", xpub)`,
         u1Hex,
         u2Hex,
         u3Hex,
+        ucHex,
         t,
         lines
       };
@@ -1056,7 +1249,7 @@ print("xpub:", xpub)`,
           resetAfterMnemonicUpdate();
           renderStep1();
           if (cleaned) {
-            setStatus(step1Status, "Mnemonic updated manually. Step 2-5 cleared; run Step 2 again.", true);
+            setStatus(step1Status, "Mnemonic updated manually. Step 2-6 cleared; run Step 2 again.", true);
           } else {
             setStatus(step1Status, "Mnemonic is empty. Enter words before running Step 2.");
           }
@@ -1072,16 +1265,20 @@ print("xpub:", xpub)`,
       state.firstChildDetails = null;
       state.firstGrandchildDetails = null;
       state.xpubDetails = null;
+      state.xpubAddressDetails = null;
       state.children = [];
       state.grandchildren = [];
       step2Result.innerHTML = "";
       step3Result.innerHTML = "";
       step4Result.innerHTML = "";
       step5Result.innerHTML = "";
+      step6Result.innerHTML = "";
+      if (walletPubInput) walletPubInput.value = "";
       setStatus(step2Status, "");
       setStatus(step3Status, "");
       setStatus(step4Status, "");
       setStatus(step5Status, "");
+      setStatus(step6Status, "");
     }
 
     function renderStep2() {
@@ -1099,6 +1296,8 @@ print("xpub:", xpub)`,
         `U0001 = HMAC_SHA512(P, S || block_index) = ${state.pbkdf2Meta.u1Hex}`,
         `U0002 = HMAC_SHA512(P, U0001) = ${state.pbkdf2Meta.u2Hex}`,
         `U0003 = HMAC_SHA512(P, U0002) = ${state.pbkdf2Meta.u3Hex}`,
+        `......`,
+        `U2048 = ${state.pbkdf2Meta.ucHex}`,
         `T1 = U0001 XOR U0002 XOR ... XOR U2048 = ${state.seedHex}`,
         `seed_512 = PBKDF2_HMAC_SHA512(P, S, c, dkLen) = T1 = ${state.seedHex}`
       ].join("\n");
@@ -1245,6 +1444,70 @@ print("xpub:", xpub)`,
       `;
     }
 
+    function renderStep6() {
+      if (!state.xpubAddressDetails) return;
+      const d = state.xpubAddressDetails;
+      const firstBlock = [
+        `wallet_public_key_xpub = ${d.xpub}`,
+        `decoded_xpub_bytes = Base58Decode(xpub) = ${d.decodedHex}`,
+        `payload_78bytes = ${d.payloadHex}`,
+        `checksum(embedded) = ${d.checksumHex}`,
+        `checksum(computed) = SHA256(SHA256(payload))[0:4] = ${d.checksumCalcHex}`,
+        `version = ${d.versionHex}`,
+        `depth = ${d.depthHex}`,
+        `parent_fingerprint = ${d.parentFingerprintHex}`,
+        `child_number = ${d.childNumberHex}`,
+        `chain_code = ${d.chainCodeHex}`,
+        `key_data(compressed pubkey) = ${d.keyDataHex}`,
+        ``,
+        `[A] Derive external chain m/0 from account xpub`,
+        `index = base_index (0->0x0) + hardened_offset (0x00000000) = 0x00000000`,
+        `data = parent_compressed_pubkey || index = ${d.externalDataHex}`,
+        `I = HMAC_SHA512(parent_chain_code, data) = ${d.externalIHex}`,
+        `IL = ${d.externalILHex}`,
+        `IR = ${d.externalIRHex}`,
+        `child_pubkey(m/0) = point(parse256(IL)) + parent_pubkey = ${d.externalPubHex}`,
+        `child_chain_code(m/0) = IR = ${d.externalChainHex}`,
+        `chain_match = ${d.externalChainMatch}`,
+        ``,
+        `[B] Derive first wallet address node m/0/0`,
+        `index = base_index (0->0x0) + hardened_offset (0x00000000) = 0x00000000`,
+        `data = parent_compressed_pubkey || index = ${d.firstDataHex}`,
+        `I = HMAC_SHA512(parent_chain_code, data) = ${d.firstIHex}`,
+        `IL = ${d.firstILHex}`,
+        `IR = ${d.firstIRHex}`,
+        `child_pubkey(m/0/0) = point(parse256(IL)) + parent_pubkey = ${d.firstPubHex}`,
+        `child_chain_code(m/0/0) = IR = ${d.firstChainHex}`,
+        `chain_match = ${d.firstChainMatch}`,
+        `witness_program = RIPEMD160(SHA256(child_pubkey)) = ${d.firstProgramHex}`,
+        `address = Bech32("bc", [0] + convertbits(witness_program,8->5)) = ${d.firstAddress}`
+      ].join("\n");
+
+      const rows = d.more.map(item => `
+        <tr>
+          <td>${item.index}</td>
+          <td>${item.path}</td>
+          <td>${item.pubkeyHex}</td>
+          <td>${item.programHex}</td>
+          <td>${item.address}</td>
+        </tr>
+      `).join("");
+
+      step6Result.innerHTML = `
+        <div class="result">
+          <h4>Step-by-step for First Address (m/0/0)</h4>
+          <pre class="mono">${firstBlock}</pre>
+        </div>
+        <div class="result">
+          <h4>Three More Addresses from Same Wallet Public Key</h4>
+          <table>
+            <thead><tr><th>index</th><th>path</th><th>compressed pubkey</th><th>witness program (HASH160)</th><th>address</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      `;
+    }
+
     async function runStep1() {
       const selectedBits = parseInt(entropyBitsSelect.value, 10);
       const entropyBytes = selectedBits === 256 ? 32 : 16;
@@ -1265,16 +1528,20 @@ print("xpub:", xpub)`,
       state.firstChildDetails = null;
       state.firstGrandchildDetails = null;
       state.xpubDetails = null;
+      state.xpubAddressDetails = null;
       state.children = [];
       state.grandchildren = [];
       step2Result.innerHTML = "";
       step3Result.innerHTML = "";
       step4Result.innerHTML = "";
       step5Result.innerHTML = "";
+      step6Result.innerHTML = "";
+      if (walletPubInput) walletPubInput.value = "";
       setStatus(step2Status, "");
       setStatus(step3Status, "");
       setStatus(step4Status, "");
       setStatus(step5Status, "");
+      setStatus(step6Status, "");
 
       renderStep1();
       setStatus(step1Status, `Step 1 complete (${selectedBits}-bit entropy, ${state.mnemonicTable.length} words).`, true);
@@ -1306,21 +1573,26 @@ print("xpub:", xpub)`,
         blockIndexHex: pb.blockIndexHex,
         u1Hex: pb.u1Hex,
         u2Hex: pb.u2Hex,
-        u3Hex: pb.u3Hex
+        u3Hex: pb.u3Hex,
+        ucHex: pb.ucHex
       };
 
       // Reset downstream results.
       state.firstChildDetails = null;
       state.firstGrandchildDetails = null;
       state.xpubDetails = null;
+      state.xpubAddressDetails = null;
       state.children = [];
       state.grandchildren = [];
       step3Result.innerHTML = "";
       step4Result.innerHTML = "";
       step5Result.innerHTML = "";
+      step6Result.innerHTML = "";
+      if (walletPubInput) walletPubInput.value = "";
       setStatus(step3Status, "");
       setStatus(step4Status, "");
       setStatus(step5Status, "");
+      setStatus(step6Status, "");
 
       renderStep2();
       setStatus(step2Status, "Step 2 complete.", true);
@@ -1392,8 +1664,33 @@ print("xpub:", xpub)`,
       setStatus(step5Status, "Constructing xpub from account node...");
       const root = HDKey.fromMasterSeed(state.seed);
       state.xpubDetails = buildXpubDetails(root);
+      if (walletPubInput) {
+        walletPubInput.value = state.xpubDetails.xpub;
+      }
+      state.xpubAddressDetails = null;
+      step6Result.innerHTML = "";
+      setStatus(step6Status, "");
       renderStep5();
       setStatus(step5Status, "Step 5 complete.", true);
+    }
+
+    async function runStep6() {
+      const xpubText = (walletPubInput && walletPubInput.value ? walletPubInput.value : "").trim();
+      if (!xpubText) {
+        setStatus(step6Status, "Paste or generate wallet public key (xpub) first.");
+        return;
+      }
+      setStatus(step6Status, "Deriving addresses from wallet public key...");
+      try {
+        state.xpubAddressDetails = buildAddressDetailsFromXpub(xpubText);
+        renderStep6();
+        setStatus(step6Status, "Step 6 complete.", true);
+      } catch (err) {
+        state.xpubAddressDetails = null;
+        step6Result.innerHTML = "";
+        const msg = err && err.message ? err.message : "Invalid wallet public key (xpub).";
+        setStatus(step6Status, `Step 6 failed: ${msg}`);
+      }
     }
 
     function openPopup(step, type) {
@@ -1460,6 +1757,15 @@ print("xpub:", xpub)`,
         await runStep5();
       } finally {
         runStep5Btn.disabled = false;
+      }
+    });
+
+    runStep6Btn.addEventListener("click", async () => {
+      runStep6Btn.disabled = true;
+      try {
+        await runStep6();
+      } finally {
+        runStep6Btn.disabled = false;
       }
     });
 
