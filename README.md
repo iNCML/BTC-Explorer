@@ -9,6 +9,7 @@ This repository contains interactive, static HTML demos for learning Bitcoin int
 - `btc-address-encoding.html`: interactive exploration of BTC address encoding methods.
 - `btc-signature-lab/`: signature-focused lab (ECDSA and Schnorr concepts/steps).
 - `btc-transactions/`: step-by-step transaction preimage construction, signing, and verification (supports `P2WPKH` and `P2WSH`).
+- `btc-wallet-generation.html`: interactive wallet flow from entropy and mnemonic to PBKDF2 seed, then child and grand-child address derivation.
 
 ## Run Locally
 

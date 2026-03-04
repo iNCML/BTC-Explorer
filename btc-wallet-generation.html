@@ -1,0 +1,1483 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bitcoin Wallet Address Generation Explorer</title>
+  <style>
+    :root {
+      --bg: #0d1220;
+      --panel: #151e35;
+      --panel-2: #1b2847;
+      --line: #33466f;
+      --text: #e9efff;
+      --muted: #9fb0d8;
+      --accent: #4f8dff;
+      --accent-2: #77a8ff;
+      --ok: #31c46a;
+      --warn: #f2b43f;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(1200px 500px at -20% -20%, rgba(79, 141, 255, 0.28), transparent 60%),
+        radial-gradient(900px 500px at 120% 0%, rgba(84, 199, 165, 0.15), transparent 55%),
+        var(--bg);
+      line-height: 1.42;
+    }
+
+    main {
+      max-width: 1160px;
+      margin: 0 auto;
+      padding: 24px 14px 48px;
+    }
+
+    .hero {
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0));
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 14px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(1.3rem, 2.6vw, 2rem);
+    }
+
+    p { margin: 0; color: var(--muted); }
+
+    .step {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 14px;
+      padding: 14px;
+      margin-top: 12px;
+    }
+
+    .step-head {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .step-title {
+      margin: 0;
+      font-size: 1.05rem;
+      color: #f3f7ff;
+    }
+
+    .step-tools {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .run-btn {
+      border: 0;
+      border-radius: 10px;
+      color: white;
+      background: linear-gradient(180deg, var(--accent-2), var(--accent));
+      padding: 8px 12px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 8px 22px rgba(79, 141, 255, 0.3);
+    }
+
+    .run-btn[disabled] {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
+    .mini-link {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--text);
+      background: var(--panel-2);
+      padding: 5px 10px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .step-note {
+      margin-top: 4px;
+      margin-bottom: 10px;
+      color: var(--muted);
+      font-size: 0.94rem;
+    }
+
+    .result {
+      border: 1px solid #2f3f64;
+      background: #11192d;
+      border-radius: 10px;
+      padding: 10px;
+      margin-top: 8px;
+    }
+
+    .result h4 {
+      margin: 0 0 6px;
+      font-size: 0.93rem;
+      color: #dce8ff;
+      letter-spacing: 0.01em;
+    }
+
+    .kv {
+      margin: 0;
+      font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+      font-size: 0.82rem;
+      color: #d6e3ff;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .mono {
+      font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+      font-size: 0.83rem;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.84rem;
+      margin-top: 6px;
+      overflow: hidden;
+      border-radius: 8px;
+    }
+
+    th, td {
+      border: 1px solid #304064;
+      padding: 7px;
+      text-align: left;
+      vertical-align: top;
+      word-break: break-word;
+    }
+
+    th {
+      background: #1a2746;
+      color: #dce7ff;
+      font-weight: 700;
+    }
+
+    td {
+      background: #121b31;
+      color: #ceddff;
+      font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+      font-size: 0.8rem;
+    }
+
+    .status {
+      margin-top: 8px;
+      color: var(--warn);
+      font-size: 0.88rem;
+    }
+
+    .status.ok { color: var(--ok); }
+
+    .inline-input {
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      padding: 7px 9px;
+      background: #121a2f;
+      color: var(--text);
+      min-width: 230px;
+    }
+
+    .mnemonic-input {
+      width: 100%;
+      min-height: 88px;
+      resize: vertical;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      padding: 8px 10px;
+      background: #0f172b;
+      color: var(--text);
+      font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+      font-size: 0.83rem;
+      line-height: 1.4;
+    }
+
+    .result-note {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    details {
+      margin-top: 8px;
+      border: 1px solid #2f3f64;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    summary {
+      cursor: pointer;
+      background: #18233f;
+      padding: 8px 10px;
+      color: #dce7ff;
+      font-weight: 700;
+      font-size: 0.86rem;
+    }
+
+    details .mono {
+      margin: 0;
+      padding: 10px;
+      background: #10182c;
+      max-height: 360px;
+      overflow: auto;
+    }
+
+    .modal.hidden { display: none; }
+
+    .modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(4, 8, 18, 0.85);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      z-index: 999;
+    }
+
+    .modal-card {
+      width: min(980px, 100%);
+      max-height: 86vh;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #10182b;
+      padding: 12px;
+    }
+
+    .modal-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .modal-head h3 {
+      margin: 0;
+      font-size: 1rem;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .modal-actions button {
+      border: 1px solid var(--line);
+      background: var(--panel-2);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 6px 10px;
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 0.8rem;
+    }
+
+    .modal pre {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: #0f1729;
+      border: 1px solid #2a3a60;
+      border-radius: 8px;
+      padding: 10px;
+      font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+      font-size: 0.8rem;
+      line-height: 1.42;
+      color: #d8e5ff;
+    }
+
+    @media (max-width: 860px) {
+      .step-head { align-items: flex-start; }
+      .step-tools { width: 100%; }
+      .inline-input { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="hero">
+      <h1>Bitcoin Wallet Address Generation Explorer</h1>
+      <p>
+        Interactive walkthrough from random entropy to mnemonic, wallet seed, and hierarchical child/grand-child addresses (BIP39 + BIP32 + Bech32 P2WPKH).
+      </p>
+    </section>
+
+    <section class="step" id="step1">
+      <div class="step-head">
+        <h2 class="step-title">Step 1: Generate Entropy (128-bit or 256-bit) and Mnemonic Words</h2>
+        <div class="step-tools">
+          <select id="entropyBits" class="inline-input" aria-label="Entropy size">
+            <option value="128" selected>128-bit entropy (12 words)</option>
+            <option value="256">256-bit entropy (24 words)</option>
+          </select>
+          <button class="run-btn" id="runStep1">Run Step 1</button>
+          <button class="mini-link" data-step="step1" data-type="algorithm">algorithm</button>
+          <button class="mini-link" data-step="step1" data-type="python">python</button>
+          <button class="mini-link" data-step="step1" data-type="code">code</button>
+        </div>
+      </div>
+      <p class="step-note">Choose 128-bit (16 bytes) or 256-bit (32 bytes) entropy, append checksum bits, split into 11-bit groups, and map each group to BIP39 words (12 or 24 words).</p>
+      <div id="step1Result"></div>
+      <div class="status" id="step1Status"></div>
+    </section>
+
+    <section class="step" id="step2">
+      <div class="step-head">
+        <h2 class="step-title">Step 2: Generate 512-bit Wallet Seed with PBKDF2-HMAC-SHA512</h2>
+        <div class="step-tools">
+          <input id="passphrase" class="inline-input" placeholder="Optional BIP39 passphrase (default empty)" />
+          <button class="run-btn" id="runStep2">Run Step 2</button>
+          <button class="mini-link" data-step="step2" data-type="algorithm">algorithm</button>
+          <button class="mini-link" data-step="step2" data-type="python">python</button>
+          <button class="mini-link" data-step="step2" data-type="code">code</button>
+        </div>
+      </div>
+      <p class="step-note">Use password = mnemonic (NFKD) and salt = "mnemonic" + passphrase (NFKD). NFKD is Unicode normalization so equivalent text maps to consistent bytes; <span class="mono">c</span> is the PBKDF2 iteration count (2048); <span class="mono">dkLen</span> is the derived-key output length (64 bytes).</p>
+      <div id="step2Result"></div>
+      <div class="status" id="step2Status"></div>
+    </section>
+
+    <section class="step" id="step3">
+      <div class="step-head">
+        <h2 class="step-title">Step 3: Derive Three Child Addresses and Paths</h2>
+        <div class="step-tools">
+          <button class="run-btn" id="runStep3">Run Step 3</button>
+          <button class="mini-link" data-step="step3" data-type="algorithm">algorithm</button>
+          <button class="mini-link" data-step="step3" data-type="python">python</button>
+          <button class="mini-link" data-step="step3" data-type="code">code</button>
+        </div>
+      </div>
+      <p class="step-note">From the seed, derive BIP84 external chain paths <span class="mono">m/84'/0'/0'/0/0..2</span> and encode each compressed pubkey as a mainnet P2WPKH address.</p>
+      <div id="step3Result"></div>
+      <div class="status" id="step3Status"></div>
+    </section>
+
+    <section class="step" id="step4">
+      <div class="step-head">
+        <h2 class="step-title">Step 4: Derive Three Grand-child Addresses (Next Level)</h2>
+        <div class="step-tools">
+          <button class="run-btn" id="runStep4">Run Step 4</button>
+          <button class="mini-link" data-step="step4" data-type="algorithm">algorithm</button>
+          <button class="mini-link" data-step="step4" data-type="python">python</button>
+          <button class="mini-link" data-step="step4" data-type="code">code</button>
+        </div>
+      </div>
+      <p class="step-note">For each child path from Step 3, derive one deeper path by appending <span class="mono">/0</span>, then compute three grand-child addresses.</p>
+      <div id="step4Result"></div>
+      <div class="status" id="step4Status"></div>
+    </section>
+
+    <section class="step" id="step5">
+      <div class="step-head">
+        <h2 class="step-title">Step 5: Create Wallet xpub (Account Extended Public Key)</h2>
+        <div class="step-tools">
+          <button class="run-btn" id="runStep5">Run Step 5</button>
+          <button class="mini-link" data-step="step5" data-type="algorithm">algorithm</button>
+          <button class="mini-link" data-step="step5" data-type="python">python</button>
+          <button class="mini-link" data-step="step5" data-type="code">code</button>
+        </div>
+      </div>
+      <p class="step-note">Derive account node <span class="mono">m/84'/0'/0'</span>, serialize BIP32 xpub fields, append checksum, and Base58Check-encode to get the final xpub string.</p>
+      <div id="step5Result"></div>
+      <div class="status" id="step5Status"></div>
+    </section>
+  </main>
+
+  <div class="modal hidden" id="popup" role="dialog" aria-modal="true" aria-labelledby="popupTitle">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3 id="popupTitle"></h3>
+        <div class="modal-actions">
+          <button id="popupCopy" type="button">copy</button>
+          <button id="popupClose" type="button">Close</button>
+        </div>
+      </div>
+      <pre id="popupBody"></pre>
+    </div>
+  </div>
+
+  <script type="module">
+    import { sha256 } from "https://esm.sh/@noble/hashes@1.5.0/sha256";
+    import { sha512 } from "https://esm.sh/@noble/hashes@1.5.0/sha512";
+    import { hmac } from "https://esm.sh/@noble/hashes@1.5.0/hmac";
+    import { ripemd160 } from "https://esm.sh/@noble/hashes@1.5.0/ripemd160";
+    import { wordlist } from "https://esm.sh/@scure/bip39@1.3.0/wordlists/english";
+    import { HDKey } from "https://esm.sh/@scure/bip32@1.4.0";
+    import { bech32 } from "https://esm.sh/@scure/base@1.1.6";
+
+    const encoder = new TextEncoder();
+
+    const state = {
+      entropy: null,
+      entropyBits: 128,
+      mnemonic: "",
+      checksumBits: "",
+      mnemonicTable: [],
+      seed: null,
+      seedHex: "",
+      pbkdf2Lines: [],
+      pbkdf2Meta: null,
+      firstChildDetails: null,
+      firstGrandchildDetails: null,
+      xpubDetails: null,
+      children: [],
+      grandchildren: []
+    };
+
+    const snippets = {
+      step1: {
+        algorithm: `BIP39 Mnemonic (128-bit entropy)
+
+entropy(128) = random 16 bytes
+checksum = SHA256(entropy)[0:4 bits]
+stream = entropy || checksum  (132 bits)
+split stream into 12 groups of 11 bits
+each 11-bit value -> index in BIP39 English wordlist
+join 12 words with spaces -> mnemonic`,
+        python: `# Step 1 - Entropy -> BIP39 mnemonic (128-bit)
+import os, hashlib
+from mnemonic import Mnemonic
+
+entropy = os.urandom(16)  # 128 bits
+mnemo = Mnemonic("english")
+words = mnemo.to_mnemonic(entropy)
+
+print("entropy:", entropy.hex())
+print("mnemonic:", words)
+
+# Manual checksum bits (4 bits for 128-bit entropy)
+entropy_bits = ''.join(f'{b:08b}' for b in entropy)
+checksum_bits = f'{hashlib.sha256(entropy).digest()[0]:08b}'[:4]
+print("checksum_bits:", checksum_bits)
+print("combined_len:", len(entropy_bits + checksum_bits))`,
+        code: `// Bitcoin Core note for Step 1:
+// Bitcoin Core does NOT implement BIP39 mnemonic generation.
+// It uses cryptographic randomness and HD seeds directly.
+
+// src/random.h / src/random.cpp (conceptual usage)
+void GetStrongRandBytes(Span<unsigned char> bytes);
+
+// Wallet seed creation is performed without BIP39 words.
+// Mnemonic handling is typically done by external wallet software.`
+      },
+      step2: {
+        algorithm: `BIP39 Seed via PBKDF2-HMAC-SHA512
+
+password = NFKD(mnemonic)
+salt = NFKD("mnemonic" + passphrase)
+params: c=2048, dkLen=64, PRF=HMAC-SHA512
+
+for block i=1:
+  U1 = PRF(password, salt || INT_32_BE(1))
+  U2 = PRF(password, U1)
+  ...
+  U2048 = PRF(password, U2047)
+  T1 = U1 XOR U2 XOR ... XOR U2048
+
+seed = T1 (64 bytes = 512 bits)`,
+        python: `# Step 2 - PBKDF2 detailed computation (single block)
+import hashlib, hmac, unicodedata
+
+mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+passphrase = ""
+
+P = unicodedata.normalize("NFKD", mnemonic).encode()
+S = unicodedata.normalize("NFKD", "mnemonic" + passphrase).encode()
+
+c = 2048
+u = hmac.new(P, S + (1).to_bytes(4, "big"), hashlib.sha512).digest()
+t = bytearray(u)
+print("U0001:", u.hex())
+
+for j in range(2, c + 1):
+    u = hmac.new(P, u, hashlib.sha512).digest()
+    t = bytearray(a ^ b for a, b in zip(t, u))
+    print(f"U{j:04d}:", u.hex())
+
+seed = bytes(t)
+print("seed:", seed.hex())`,
+        code: `// Bitcoin Core note for Step 2:
+// Bitcoin Core does NOT use BIP39 PBKDF2 for wallet seed creation.
+// It stores/uses HD seeds directly in wallet internals.
+
+// Closest relevant HD operation in Core is BIP32 seed handling:
+// src/pubkey.cpp
+void CExtKey::SetSeed(Span<const unsigned char> seed) {
+    static const unsigned char hashkey[] = {'B','i','t','c','o','i','n',' ','s','e','e','d'};
+    uint512 I = CHMAC_SHA512(hashkey, sizeof(hashkey))
+                  .Write(seed.data(), seed.size())
+                  .Finalize();
+    // ... split into private key + chain code
+}`
+      },
+      step3: {
+        algorithm: `BIP32/BIP84 Child Derivation
+
+input: seed (512 bits)
+master = BIP32 master key from seed
+account external branch = m/84'/0'/0'/0
+children = index 0,1,2
+
+for each child:
+  node = derive(path)
+  pubkey = compressed secp256k1 public key (33 bytes)
+  pkh20 = RIPEMD160(SHA256(pubkey))
+  addr = Bech32("bc", witness_version=0, program=pkh20)
+output: 3 child addresses + paths`,
+        python: `# Step 3 - Derive three child addresses (BIP84 P2WPKH)
+from bip32utils import BIP32Key
+import hashlib, bech32
+
+seed_hex = "<64-byte-seed-hex>"
+seed = bytes.fromhex(seed_hex)
+root = BIP32Key.fromEntropy(seed)
+
+paths = ["m/84'/0'/0'/0/0", "m/84'/0'/0'/0/1", "m/84'/0'/0'/0/2"]
+
+for path in paths:
+    node = root
+    for p in path.split('/')[1:]:
+        hardened = p.endswith("'")
+        idx = int(p.rstrip("'"))
+        node = node.ChildKey(idx + (0x80000000 if hardened else 0))
+    pub = node.PublicKey()
+    h160 = hashlib.new('ripemd160', hashlib.sha256(pub).digest()).digest()
+    words = bech32.convertbits(h160, 8, 5)
+    addr = bech32.bech32_encode('bc', [0] + words)
+    print(path, addr)`,
+        code: `// Bitcoin Core - BIP32 derivation core
+// src/pubkey.cpp
+
+void CExtKey::SetSeed(Span<const unsigned char> seed) {
+    static const unsigned char hashkey[] = {'B','i','t','c','o','i','n',' ','s','e','e','d'};
+    uint512 I = CHMAC_SHA512(hashkey, sizeof(hashkey))
+                  .Write(seed.data(), seed.size())
+                  .Finalize();
+    key.Set(I.begin(), I.begin() + 32, true);
+    memcpy(chaincode.begin(), I.begin() + 32, 32);
+}
+
+bool CExtKey::Derive(CExtKey& out, unsigned int nChild) const {
+    // CKDpriv with hardened/non-hardened branches
+    // HMAC-SHA512(chaincode, data), then split IL/IR
+    // child_key = (IL + parent_key) mod n
+    // child_chaincode = IR
+}
+
+// Address encoding (bech32 for segwit) is handled elsewhere in script/address code.`
+      },
+      step4: {
+        algorithm: `Next-Level Grand-child Derivation
+
+from each child path in Step 3:
+  child path:     m/84'/0'/0'/0/i
+  grandchild path m/84'/0'/0'/0/i/0
+
+derive three nodes at next depth
+for each node:
+  compressed pubkey -> HASH160
+  encode as bech32 v0 P2WPKH address`,
+        python: `# Step 4 - Derive one deeper level for each Step 3 child
+# Example resulting paths:
+# m/84'/0'/0'/0/0/0
+# m/84'/0'/0'/0/1/0
+# m/84'/0'/0'/0/2/0
+#
+# Derivation mechanics are identical to Step 3.
+# Just append '/0' and compute address from each derived pubkey.`,
+        code: `// Bitcoin Core derivation depth change is still CExtKey::Derive.
+// Repeating Derive() one more time moves to next tree level.
+
+// Conceptually:
+// child = Derive(parent, i)
+// grandchild = Derive(child, 0)
+//
+// Each additional Derive call advances one level in the BIP32 tree.`
+      },
+      step5: {
+        algorithm: `Create BIP32 xpub for account path m/84'/0'/0'
+
+account_node = CKDpriv(m, 84') -> CKDpriv(..., 0') -> CKDpriv(..., 0')
+parent_node = m/84'/0'
+
+serialize 78 bytes:
+  version(4)=0488B21E
+  depth(1)=03
+  parent_fingerprint(4)=HASH160(parent_pubkey)[0:4]
+  child_number(4)=80000000
+  chain_code(32)=account_chain_code
+  key_data(33)=account_compressed_pubkey
+
+checksum = SHA256(SHA256(serialized))[0:4]
+xpub = Base58Encode(serialized || checksum)`,
+        python: `# Step 5 - Build xpub manually (Base58Check)
+import hmac, hashlib
+from bip32utils import BIP32Key
+
+seed = bytes.fromhex("<seed_hex>")
+root = BIP32Key.fromEntropy(seed)
+acct = root.ChildKey(84 + 0x80000000).ChildKey(0 + 0x80000000).ChildKey(0 + 0x80000000)
+parent = root.ChildKey(84 + 0x80000000).ChildKey(0 + 0x80000000)
+
+version = bytes.fromhex("0488B21E")
+depth = bytes([3])
+parent_fp = hashlib.new("ripemd160", hashlib.sha256(parent.PublicKey()).digest()).digest()[:4]
+child_num = (0x80000000).to_bytes(4, "big")
+chain_code = acct.C
+key_data = acct.PublicKey()
+
+payload = version + depth + parent_fp + child_num + chain_code + key_data
+checksum = hashlib.sha256(hashlib.sha256(payload).digest()).digest()[:4]
+full = payload + checksum
+
+alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+n = int.from_bytes(full, "big")
+s = ""
+while n > 0:
+    n, r = divmod(n, 58)
+    s = alphabet[r] + s
+pad = 0
+for b in full:
+    if b == 0:
+        pad += 1
+    else:
+        break
+xpub = "1" * pad + s
+print("xpub:", xpub)`,
+        code: `// Bitcoin Core xpub serialization path (conceptual):
+// src/pubkey.h / src/pubkey.cpp
+// CExtPubKey::Encode(unsigned char code[BIP32_EXTKEY_SIZE]) const
+//
+// Layout:
+// [4-byte version] [1-byte depth] [4-byte parent fingerprint]
+// [4-byte child number] [32-byte chain code] [33-byte compressed pubkey]
+//
+// Base58Check encoding is then applied by key-encoding utilities
+// (version/prefix depends on network and key type).`
+      }
+    };
+
+    const runStep1Btn = document.getElementById("runStep1");
+    const runStep2Btn = document.getElementById("runStep2");
+    const runStep3Btn = document.getElementById("runStep3");
+    const runStep4Btn = document.getElementById("runStep4");
+    const runStep5Btn = document.getElementById("runStep5");
+
+    const step1Result = document.getElementById("step1Result");
+    const step2Result = document.getElementById("step2Result");
+    const step3Result = document.getElementById("step3Result");
+    const step4Result = document.getElementById("step4Result");
+    const step5Result = document.getElementById("step5Result");
+
+    const step1Status = document.getElementById("step1Status");
+    const step2Status = document.getElementById("step2Status");
+    const step3Status = document.getElementById("step3Status");
+    const step4Status = document.getElementById("step4Status");
+    const step5Status = document.getElementById("step5Status");
+
+    const entropyBitsSelect = document.getElementById("entropyBits");
+    const passphraseInput = document.getElementById("passphrase");
+
+    const popup = document.getElementById("popup");
+    const popupTitle = document.getElementById("popupTitle");
+    const popupBody = document.getElementById("popupBody");
+    const popupCopy = document.getElementById("popupCopy");
+    const popupClose = document.getElementById("popupClose");
+
+    let popupText = "";
+    const HARDENED_OFFSET = 0x80000000;
+    const SECP256K1_N = BigInt("0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141");
+
+    function setStatus(el, text, ok = false) {
+      el.textContent = text;
+      el.classList.toggle("ok", ok);
+    }
+
+    function toHex(bytes) {
+      return Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("");
+    }
+
+    function fromHex(hex) {
+      const clean = hex.toLowerCase();
+      if (clean.length % 2 !== 0) throw new Error("Invalid hex length");
+      const out = new Uint8Array(clean.length / 2);
+      for (let i = 0; i < out.length; i += 1) {
+        out[i] = parseInt(clean.slice(i * 2, i * 2 + 2), 16);
+      }
+      return out;
+    }
+
+    function concatBytes(...parts) {
+      const total = parts.reduce((n, p) => n + p.length, 0);
+      const out = new Uint8Array(total);
+      let offset = 0;
+      for (const p of parts) {
+        out.set(p, offset);
+        offset += p.length;
+      }
+      return out;
+    }
+
+    function indexTo4BytesBE(index) {
+      return new Uint8Array([
+        (index >>> 24) & 0xff,
+        (index >>> 16) & 0xff,
+        (index >>> 8) & 0xff,
+        index & 0xff
+      ]);
+    }
+
+    function bytesToBigInt(bytes) {
+      return BigInt(`0x${toHex(bytes)}`);
+    }
+
+    function bigIntTo32Bytes(num) {
+      const hex = num.toString(16).padStart(64, "0");
+      const out = new Uint8Array(32);
+      for (let i = 0; i < 32; i += 1) {
+        out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+      }
+      return out;
+    }
+
+    function hash160(bytes) {
+      return ripemd160(sha256(bytes));
+    }
+
+    function doubleSha256(bytes) {
+      return sha256(sha256(bytes));
+    }
+
+    function hex32(index) {
+      return `0x${index.toString(16).padStart(8, "0")}`;
+    }
+
+    function baseHex(index) {
+      return `0x${index.toString(16)}`;
+    }
+
+    function base58Encode(bytes) {
+      const alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+      let x = bytesToBigInt(bytes);
+      let out = "";
+      while (x > 0n) {
+        const mod = Number(x % 58n);
+        out = alphabet[mod] + out;
+        x /= 58n;
+      }
+      let leading = 0;
+      for (const b of bytes) {
+        if (b === 0) {
+          leading += 1;
+        } else {
+          break;
+        }
+      }
+      return `${"1".repeat(leading)}${out || "1"}`;
+    }
+
+    function buildFirstChildDetails(root, seedBytes) {
+      const masterI = hmac(sha512, encoder.encode("Bitcoin seed"), seedBytes);
+      const masterIL = masterI.slice(0, 32);
+      const masterIR = masterI.slice(32);
+      const stages = [
+        { parentPath: "m", childPath: "m/84'", index: HARDENED_OFFSET + 84 },
+        { parentPath: "m/84'", childPath: "m/84'/0'", index: HARDENED_OFFSET + 0 },
+        { parentPath: "m/84'/0'", childPath: "m/84'/0'/0'", index: HARDENED_OFFSET + 0 },
+        { parentPath: "m/84'/0'/0'", childPath: "m/84'/0'/0'/0", index: 0 },
+        { parentPath: "m/84'/0'/0'/0", childPath: "m/84'/0'/0'/0/0", index: 0 }
+      ];
+
+      const nodes = { m: root };
+      for (const stage of stages) {
+        nodes[stage.childPath] = root.derive(stage.childPath);
+      }
+
+      const stepDetails = stages.map(stage => {
+        const parent = nodes[stage.parentPath];
+        const child = nodes[stage.childPath];
+        const indexBytes = indexTo4BytesBE(stage.index);
+        const hardened = stage.index >= HARDENED_OFFSET;
+        const baseIndex = hardened ? stage.index - HARDENED_OFFSET : stage.index;
+        const indexExplain = hardened
+          ? `index = base_index (${baseIndex}->${baseHex(baseIndex)}) + hardened_offset (0x80000000) = ${hex32(stage.index)}`
+          : `index = base_index (${baseIndex}->${baseHex(baseIndex)}) + hardened_offset (0x00000000) = ${hex32(stage.index)}`;
+        const data = hardened
+          ? concatBytes(new Uint8Array([0x00]), parent.privateKey, indexBytes)
+          : concatBytes(parent.publicKey, indexBytes);
+        const I = hmac(sha512, parent.chainCode, data);
+        const IL = I.slice(0, 32);
+        const IR = I.slice(32);
+        const childPrivCalc = (bytesToBigInt(IL) + bytesToBigInt(parent.privateKey)) % SECP256K1_N;
+        const childPrivCalcHex = toHex(bigIntTo32Bytes(childPrivCalc));
+        const childPrivHex = toHex(child.privateKey);
+        const childChainHex = toHex(child.chainCode);
+        const irHex = toHex(IR);
+        return {
+          parentPath: stage.parentPath,
+          childPath: stage.childPath,
+          indexExplain,
+          indexHex: toHex(indexBytes),
+          parentPrivHex: toHex(parent.privateKey),
+          parentPubHex: toHex(parent.publicKey),
+          parentChainHex: toHex(parent.chainCode),
+          dataExpr: hardened
+            ? "0x00 || parent_private_key || index"
+            : "parent_compressed_pubkey || index",
+          dataHex: toHex(data),
+          iHex: toHex(I),
+          ilHex: toHex(IL),
+          irHex,
+          childPrivCalcHex,
+          childPrivHex,
+          childChainHex,
+          privMatches: childPrivCalcHex === childPrivHex,
+          chainMatches: irHex === childChainHex
+        };
+      });
+
+      const finalNode = nodes["m/84'/0'/0'/0/0"];
+      const finalAddr = pubkeyToP2WPKH(finalNode.publicKey);
+      return {
+        seedHex: toHex(seedBytes),
+        masterIHex: toHex(masterI),
+        masterPrivHex: toHex(masterIL),
+        masterChainHex: toHex(masterIR),
+        rootPrivHex: toHex(root.privateKey),
+        rootChainHex: toHex(root.chainCode),
+        steps: stepDetails,
+        finalPubHex: toHex(finalNode.publicKey),
+        finalProgramHex: finalAddr.programHex,
+        finalAddress: finalAddr.address
+      };
+    }
+
+    function buildFirstGrandchildDetails(root) {
+      const parentPath = "m/84'/0'/0'/0/0";
+      const childPath = `${parentPath}/0`;
+      const index = 0;
+      const indexBytes = indexTo4BytesBE(index);
+      const parentNode = root.derive(parentPath);
+      const childNode = root.derive(childPath);
+      const data = concatBytes(parentNode.publicKey, indexBytes);
+      const I = hmac(sha512, parentNode.chainCode, data);
+      const IL = I.slice(0, 32);
+      const IR = I.slice(32);
+      const childPrivCalc = (bytesToBigInt(IL) + bytesToBigInt(parentNode.privateKey)) % SECP256K1_N;
+      const childPrivCalcHex = toHex(bigIntTo32Bytes(childPrivCalc));
+      const childPrivHex = toHex(childNode.privateKey);
+      const childChainHex = toHex(childNode.chainCode);
+      const addr = pubkeyToP2WPKH(childNode.publicKey);
+      return {
+        parentPath,
+        childPath,
+        index,
+        indexExplain: `index = base_index (${index}->${baseHex(index)}) + hardened_offset (0x00000000) = ${hex32(index)}`,
+        indexHex: toHex(indexBytes),
+        parentPrivHex: toHex(parentNode.privateKey),
+        parentPubHex: toHex(parentNode.publicKey),
+        parentChainHex: toHex(parentNode.chainCode),
+        dataHex: toHex(data),
+        iHex: toHex(I),
+        ilHex: toHex(IL),
+        irHex: toHex(IR),
+        childPrivCalcHex,
+        childPrivHex,
+        childChainHex,
+        privMatches: childPrivCalcHex === childPrivHex,
+        chainMatches: toHex(IR) === childChainHex,
+        finalPubHex: toHex(childNode.publicKey),
+        finalProgramHex: addr.programHex,
+        finalAddress: addr.address
+      };
+    }
+
+    function buildXpubDetails(root) {
+      const accountPath = "m/84'/0'/0'";
+      const parentPath = "m/84'/0'";
+      const accountNode = root.derive(accountPath);
+      const parentNode = root.derive(parentPath);
+
+      const version = fromHex("0488b21e");
+      const depth = new Uint8Array([0x03]);
+      const parentFingerprint = hash160(parentNode.publicKey).slice(0, 4);
+      const childNumber = indexTo4BytesBE(HARDENED_OFFSET);
+      const chainCode = accountNode.chainCode;
+      const keyData = accountNode.publicKey;
+      const payload = concatBytes(
+        version,
+        depth,
+        parentFingerprint,
+        childNumber,
+        chainCode,
+        keyData
+      );
+      const checksum = doubleSha256(payload).slice(0, 4);
+      const full = concatBytes(payload, checksum);
+      const xpub = base58Encode(full);
+
+      return {
+        accountPath,
+        parentPath,
+        versionHex: toHex(version),
+        depthHex: toHex(depth),
+        parentFingerprintHex: toHex(parentFingerprint),
+        childNumberHex: toHex(childNumber),
+        chainCodeHex: toHex(chainCode),
+        keyDataHex: toHex(keyData),
+        payloadHex: toHex(payload),
+        checksumHex: toHex(checksum),
+        fullHex: toHex(full),
+        xpub,
+        xpubFromLibrary: accountNode.publicExtendedKey
+      };
+    }
+
+    function bytesToBits(bytes) {
+      return Array.from(bytes, b => b.toString(2).padStart(8, "0")).join("");
+    }
+
+    function randomBytes(size) {
+      const out = new Uint8Array(size);
+      crypto.getRandomValues(out);
+      return out;
+    }
+
+    function entropyToMnemonicDetails(entropy) {
+      const entropyBits = bytesToBits(entropy);
+      const checksumLength = entropy.length * 8 / 32;
+      const checksumBits = bytesToBits(sha256(entropy)).slice(0, checksumLength);
+      const fullBits = entropyBits + checksumBits;
+      const words = [];
+      for (let i = 0; i < fullBits.length / 11; i += 1) {
+        const chunk = fullBits.slice(i * 11, i * 11 + 11);
+        const index = parseInt(chunk, 2);
+        words.push({ index, bits: chunk, word: wordlist[index] });
+      }
+      return {
+        checksumBits,
+        words,
+        mnemonic: words.map(w => w.word).join(" ")
+      };
+    }
+
+    async function pbkdf2Block1Detailed(passwordBytes, saltBytes, rounds = 2048) {
+      const blockIndex = new Uint8Array([0x00, 0x00, 0x00, 0x01]);
+      let u = hmac(sha512, passwordBytes, concatBytes(saltBytes, blockIndex));
+      const t = new Uint8Array(u);
+      const u1Hex = toHex(u);
+      let u2Hex = "";
+      let u3Hex = "";
+      const lines = [`U0001 = HMAC_SHA512(P, S || INT_32_BE(1)) = ${u1Hex}`];
+      for (let i = 2; i <= rounds; i += 1) {
+        u = hmac(sha512, passwordBytes, u);
+        if (i === 2) u2Hex = toHex(u);
+        if (i === 3) u3Hex = toHex(u);
+        for (let j = 0; j < t.length; j += 1) {
+          t[j] ^= u[j];
+        }
+        const prev = String(i - 1).padStart(4, "0");
+        lines.push(`U${String(i).padStart(4, "0")} = HMAC_SHA512(P, U${prev}) = ${toHex(u)}`);
+        if (i % 128 === 0) {
+          await new Promise(resolve => setTimeout(resolve, 0));
+        }
+      }
+      return {
+        blockIndexHex: toHex(blockIndex),
+        u1Hex,
+        u2Hex,
+        u3Hex,
+        t,
+        lines
+      };
+    }
+
+    function pubkeyToP2WPKH(pubkeyCompressed) {
+      const program = hash160(pubkeyCompressed);
+      const words = bech32.toWords(program);
+      const addr = bech32.encode("bc", [0, ...words]);
+      return { programHex: toHex(program), address: addr };
+    }
+
+    function renderStep1() {
+      if (!state.entropy) return;
+      const tableRows = state.mnemonicTable.map((row, i) => `
+        <tr>
+          <td>${i + 1}</td>
+          <td>${row.bits}</td>
+          <td>${row.index}</td>
+          <td>${row.word}</td>
+        </tr>
+      `).join("");
+
+      step1Result.innerHTML = `
+        <div class="result">
+          <h4>Generated Data</h4>
+          <div class="kv">entropy_bits = ${state.entropyBits}\nentropy = ${toHex(state.entropy)}\nchecksum_bits(${state.checksumBits.length}) = ${state.checksumBits}\nmnemonic_word_count = ${state.mnemonicTable.length}\nmnemonic = ${state.mnemonic}</div>
+        </div>
+        <div class="result">
+          <h4>11-bit Group Mapping to Words</h4>
+          <table>
+            <thead><tr><th>#</th><th>11-bit group</th><th>index</th><th>word</th></tr></thead>
+            <tbody>${tableRows}</tbody>
+          </table>
+        </div>
+        <div class="result">
+          <h4>Editable Mnemonic Used for Following Steps</h4>
+          <p class="result-note">Modify mnemonic words here. After edit, Steps 2-5 are cleared and recomputed from this updated value.</p>
+          <textarea id="mnemonicInput" class="mnemonic-input" spellcheck="false">${state.mnemonic}</textarea>
+        </div>
+      `;
+
+      const mnemonicInput = document.getElementById("mnemonicInput");
+      if (mnemonicInput) {
+        mnemonicInput.addEventListener("change", () => {
+          const cleaned = mnemonicInput.value.trim().toLowerCase().split(/\s+/).filter(Boolean).join(" ");
+          state.mnemonic = cleaned;
+          mnemonicInput.value = cleaned;
+          resetAfterMnemonicUpdate();
+          renderStep1();
+          if (cleaned) {
+            setStatus(step1Status, "Mnemonic updated manually. Step 2-5 cleared; run Step 2 again.", true);
+          } else {
+            setStatus(step1Status, "Mnemonic is empty. Enter words before running Step 2.");
+          }
+        });
+      }
+    }
+
+    function resetAfterMnemonicUpdate() {
+      state.seed = null;
+      state.seedHex = "";
+      state.pbkdf2Lines = [];
+      state.pbkdf2Meta = null;
+      state.firstChildDetails = null;
+      state.firstGrandchildDetails = null;
+      state.xpubDetails = null;
+      state.children = [];
+      state.grandchildren = [];
+      step2Result.innerHTML = "";
+      step3Result.innerHTML = "";
+      step4Result.innerHTML = "";
+      step5Result.innerHTML = "";
+      setStatus(step2Status, "");
+      setStatus(step3Status, "");
+      setStatus(step4Status, "");
+      setStatus(step5Status, "");
+    }
+
+    function renderStep2() {
+      if (!state.seed) return;
+      const lineDump = state.pbkdf2Lines.join("\n");
+      const summary = [
+        `P_text = NFKD(mnemonic) = ${state.pbkdf2Meta.passwordText}`,
+        `UTF-8 is a standard way to turn text characters into bytes.`,
+        `P = UTF8(P_text) = ${state.pbkdf2Meta.passwordHex}`,
+        `S_text = NFKD("mnemonic" + passphrase) = ${state.pbkdf2Meta.saltText}`,
+        `S = UTF8(S_text) = ${state.pbkdf2Meta.saltHex}`,
+        `block_index = INT_32_BE(1) = ${state.pbkdf2Meta.blockIndexHex}`,
+        `c = 2048`,
+        `dkLen = 64 bytes`,
+        `U0001 = HMAC_SHA512(P, S || block_index) = ${state.pbkdf2Meta.u1Hex}`,
+        `U0002 = HMAC_SHA512(P, U0001) = ${state.pbkdf2Meta.u2Hex}`,
+        `U0003 = HMAC_SHA512(P, U0002) = ${state.pbkdf2Meta.u3Hex}`,
+        `T1 = U0001 XOR U0002 XOR ... XOR U2048 = ${state.seedHex}`,
+        `seed_512 = PBKDF2_HMAC_SHA512(P, S, c, dkLen) = T1 = ${state.seedHex}`
+      ].join("\n");
+      step2Result.innerHTML = `
+        <div class="result">
+          <h4>PBKDF2 Inputs, Formulas, and Result</h4>
+          <div class="kv">${summary}</div>
+        </div>
+        <details>
+          <summary>PBKDF2 Internal Computations (all U1..U2048 values)</summary>
+          <pre class="mono">${lineDump}</pre>
+        </details>
+      `;
+    }
+
+    function renderStep3() {
+      if (!state.children.length) return;
+      const detail = state.firstChildDetails;
+      const detailSteps = detail ? detail.steps.map((step, i) => [
+        `[${i + 1}] ${step.parentPath} -> ${step.childPath}`,
+        step.indexExplain,
+        `index = ${step.indexHex}`,
+        `parent_private_key = ${step.parentPrivHex}`,
+        `parent_compressed_pubkey = ${step.parentPubHex}`,
+        `parent_chain_code = ${step.parentChainHex}`,
+        `data = ${step.dataExpr}`,
+        `data_hex = ${step.dataHex}`,
+        `I = HMAC_SHA512(parent_chain_code, data) = ${step.iHex}`,
+        `IL = ${step.ilHex}`,
+        `IR = ${step.irHex}`,
+        `child_private_key = (parse256(IL) + parent_private_key) mod n = ${step.childPrivCalcHex}`,
+        `child_chain_code = IR = ${step.childChainHex}`,
+        `matches_library_node = priv:${step.privMatches}, chain:${step.chainMatches}`
+      ].join("\n")).join("\n\n") : "";
+      const detailBlock = detail ? [
+        `seed_512 = ${detail.seedHex}`,
+        `I_master = HMAC_SHA512("Bitcoin seed", seed_512) = ${detail.masterIHex}`,
+        `master_private_key = IL(I_master) = ${detail.masterPrivHex}`,
+        `master_chain_code = IR(I_master) = ${detail.masterChainHex}`,
+        `root_key_matches = priv:${detail.masterPrivHex === detail.rootPrivHex}, chain:${detail.masterChainHex === detail.rootChainHex}`,
+        `index means the 4-byte big-endian serialized value used in HMAC input.`,
+        "",
+        detailSteps,
+        "",
+        `final_child_pubkey = ${detail.finalPubHex}`,
+        `witness_program = RIPEMD160(SHA256(final_child_pubkey)) = ${detail.finalProgramHex}`,
+        `address = Bech32("bc", [0] + convertbits(witness_program,8->5)) = ${detail.finalAddress}`
+      ].join("\n") : "";
+      const rows = state.children.map((c, i) => `
+        <tr>
+          <td>${i + 1}</td>
+          <td>${c.path}</td>
+          <td>${c.pubkeyHex}</td>
+          <td>${c.programHex}</td>
+          <td>${c.address}</td>
+        </tr>
+      `).join("");
+      step3Result.innerHTML = `
+        <div class="result">
+          <h4>Detailed Computation for First Child (m/84'/0'/0'/0/0)</h4>
+          <pre class="mono">${detailBlock}</pre>
+        </div>
+        <div class="result">
+          <h4>Derived Child Nodes and Addresses</h4>
+          <table>
+            <thead><tr><th>#</th><th>path</th><th>compressed pubkey</th><th>witness program (HASH160)</th><th>address</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    function renderStep4() {
+      if (!state.grandchildren.length) return;
+      const detail = state.firstGrandchildDetails;
+      const detailBlock = detail ? [
+        `[1] ${detail.parentPath} -> ${detail.childPath}`,
+        detail.indexExplain,
+        `index = ${detail.indexHex}`,
+        `parent_private_key = ${detail.parentPrivHex}`,
+        `parent_compressed_pubkey = ${detail.parentPubHex}`,
+        `parent_chain_code = ${detail.parentChainHex}`,
+        `data = parent_compressed_pubkey || index`,
+        `data_hex = ${detail.dataHex}`,
+        `I = HMAC_SHA512(parent_chain_code, data) = ${detail.iHex}`,
+        `IL = ${detail.ilHex}`,
+        `IR = ${detail.irHex}`,
+        `child_private_key = (parse256(IL) + parent_private_key) mod n = ${detail.childPrivCalcHex}`,
+        `child_chain_code = IR = ${detail.childChainHex}`,
+        `matches_library_node = priv:${detail.privMatches}, chain:${detail.chainMatches}`,
+        `grandchild_pubkey = ${detail.finalPubHex}`,
+        `witness_program = RIPEMD160(SHA256(grandchild_pubkey)) = ${detail.finalProgramHex}`,
+        `address = Bech32("bc", [0] + convertbits(witness_program,8->5)) = ${detail.finalAddress}`
+      ].join("\n") : "";
+      const rows = state.grandchildren.map((c, i) => `
+        <tr>
+          <td>${i + 1}</td>
+          <td>${c.path}</td>
+          <td>${c.pubkeyHex}</td>
+          <td>${c.programHex}</td>
+          <td>${c.address}</td>
+        </tr>
+      `).join("");
+      step4Result.innerHTML = `
+        <div class="result">
+          <h4>Detailed Computation for First Grand-child (m/84'/0'/0'/0/0/0)</h4>
+          <pre class="mono">${detailBlock}</pre>
+        </div>
+        <div class="result">
+          <h4>Derived Grand-child Nodes and Addresses</h4>
+          <table>
+            <thead><tr><th>#</th><th>path</th><th>compressed pubkey</th><th>witness program (HASH160)</th><th>address</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    function renderStep5() {
+      if (!state.xpubDetails) return;
+      const d = state.xpubDetails;
+      const lines = [
+        `account_path = ${d.accountPath}`,
+        `parent_path = ${d.parentPath}`,
+        `version = 0x0488B21E = ${d.versionHex}`,
+        `depth = 0x03 = ${d.depthHex}`,
+        `parent_fingerprint = HASH160(parent_pubkey)[0:4] = ${d.parentFingerprintHex}`,
+        `child_number = 0x80000000 (0') = ${d.childNumberHex}`,
+        `chain_code = ${d.chainCodeHex}`,
+        `key_data = compressed_account_pubkey = ${d.keyDataHex}`,
+        `serialized_payload_78bytes = version || depth || parent_fingerprint || child_number || chain_code || key_data`,
+        `payload_hex = ${d.payloadHex}`,
+        `checksum = SHA256(SHA256(payload))[0:4] = ${d.checksumHex}`,
+        `xpub_bytes = payload || checksum = ${d.fullHex}`,
+        `xpub = Base58Encode(xpub_bytes) = ${d.xpub}`,
+        `library_xpub = ${d.xpubFromLibrary}`,
+        `matches_library = ${d.xpub === d.xpubFromLibrary}`
+      ].join("\n");
+      step5Result.innerHTML = `
+        <div class="result">
+          <h4>Detailed xpub Construction</h4>
+          <pre class="mono">${lines}</pre>
+        </div>
+      `;
+    }
+
+    async function runStep1() {
+      const selectedBits = parseInt(entropyBitsSelect.value, 10);
+      const entropyBytes = selectedBits === 256 ? 32 : 16;
+      setStatus(step1Status, `Generating random ${selectedBits}-bit entropy and mnemonic...`);
+      const entropy = randomBytes(entropyBytes);
+      const details = entropyToMnemonicDetails(entropy);
+      state.entropy = entropy;
+      state.entropyBits = selectedBits;
+      state.mnemonic = details.mnemonic;
+      state.checksumBits = details.checksumBits;
+      state.mnemonicTable = details.words;
+
+      // Reset downstream results.
+      state.seed = null;
+      state.seedHex = "";
+      state.pbkdf2Lines = [];
+      state.pbkdf2Meta = null;
+      state.firstChildDetails = null;
+      state.firstGrandchildDetails = null;
+      state.xpubDetails = null;
+      state.children = [];
+      state.grandchildren = [];
+      step2Result.innerHTML = "";
+      step3Result.innerHTML = "";
+      step4Result.innerHTML = "";
+      step5Result.innerHTML = "";
+      setStatus(step2Status, "");
+      setStatus(step3Status, "");
+      setStatus(step4Status, "");
+      setStatus(step5Status, "");
+
+      renderStep1();
+      setStatus(step1Status, `Step 1 complete (${selectedBits}-bit entropy, ${state.mnemonicTable.length} words).`, true);
+    }
+
+    async function runStep2() {
+      if (!state.mnemonic) {
+        setStatus(step2Status, "Run Step 1 first to generate mnemonic.");
+        return;
+      }
+
+      setStatus(step2Status, "Computing PBKDF2-HMAC-SHA512 (2048 rounds)...");
+      const passphrase = passphraseInput.value || "";
+      const passwordText = state.mnemonic.normalize("NFKD");
+      const saltText = ("mnemonic" + passphrase).normalize("NFKD");
+      const passwordBytes = encoder.encode(passwordText);
+      const saltBytes = encoder.encode(saltText);
+
+      const pb = await pbkdf2Block1Detailed(passwordBytes, saltBytes, 2048);
+
+      state.seed = pb.t;
+      state.seedHex = toHex(pb.t);
+      state.pbkdf2Lines = pb.lines;
+      state.pbkdf2Meta = {
+        passwordText,
+        saltText,
+        passwordHex: toHex(passwordBytes),
+        saltHex: toHex(saltBytes),
+        blockIndexHex: pb.blockIndexHex,
+        u1Hex: pb.u1Hex,
+        u2Hex: pb.u2Hex,
+        u3Hex: pb.u3Hex
+      };
+
+      // Reset downstream results.
+      state.firstChildDetails = null;
+      state.firstGrandchildDetails = null;
+      state.xpubDetails = null;
+      state.children = [];
+      state.grandchildren = [];
+      step3Result.innerHTML = "";
+      step4Result.innerHTML = "";
+      step5Result.innerHTML = "";
+      setStatus(step3Status, "");
+      setStatus(step4Status, "");
+      setStatus(step5Status, "");
+
+      renderStep2();
+      setStatus(step2Status, "Step 2 complete.", true);
+    }
+
+    async function runStep3() {
+      if (!state.seed) {
+        setStatus(step3Status, "Run Step 2 first to generate wallet seed.");
+        return;
+      }
+
+      setStatus(step3Status, "Deriving child addresses...");
+      const root = HDKey.fromMasterSeed(state.seed);
+      const paths = ["m/84'/0'/0'/0/0", "m/84'/0'/0'/0/1", "m/84'/0'/0'/0/2"];
+      state.children = paths.map(path => {
+        const node = root.derive(path);
+        const pubkeyHex = toHex(node.publicKey);
+        const addr = pubkeyToP2WPKH(node.publicKey);
+        return {
+          path,
+          pubkeyHex,
+          programHex: addr.programHex,
+          address: addr.address
+        };
+      });
+      state.firstChildDetails = buildFirstChildDetails(root, state.seed);
+
+      // Reset downstream results.
+      state.firstGrandchildDetails = null;
+      state.grandchildren = [];
+      step4Result.innerHTML = "";
+      setStatus(step4Status, "");
+
+      renderStep3();
+      setStatus(step3Status, "Step 3 complete.", true);
+    }
+
+    async function runStep4() {
+      if (!state.children.length) {
+        setStatus(step4Status, "Run Step 3 first to derive child addresses.");
+        return;
+      }
+
+      setStatus(step4Status, "Deriving grand-child addresses...");
+      const root = HDKey.fromMasterSeed(state.seed);
+      state.grandchildren = state.children.map(child => {
+        const path = `${child.path}/0`;
+        const node = root.derive(path);
+        const pubkeyHex = toHex(node.publicKey);
+        const addr = pubkeyToP2WPKH(node.publicKey);
+        return {
+          path,
+          pubkeyHex,
+          programHex: addr.programHex,
+          address: addr.address
+        };
+      });
+      state.firstGrandchildDetails = buildFirstGrandchildDetails(root);
+
+      renderStep4();
+      setStatus(step4Status, "Step 4 complete.", true);
+    }
+
+    async function runStep5() {
+      if (!state.seed) {
+        setStatus(step5Status, "Run Step 2 first to generate wallet seed.");
+        return;
+      }
+      setStatus(step5Status, "Constructing xpub from account node...");
+      const root = HDKey.fromMasterSeed(state.seed);
+      state.xpubDetails = buildXpubDetails(root);
+      renderStep5();
+      setStatus(step5Status, "Step 5 complete.", true);
+    }
+
+    function openPopup(step, type) {
+      const source = snippets[step] && snippets[step][type];
+      if (!source) {
+        return;
+      }
+      popupTitle.textContent = `${type} - ${step.replace("step", "Step ")}`;
+      popupBody.textContent = source;
+      popupText = source;
+      popupCopy.textContent = "copy";
+      popup.classList.remove("hidden");
+    }
+
+    function closePopup() {
+      popup.classList.add("hidden");
+    }
+
+    document.querySelectorAll(".mini-link").forEach(btn => {
+      btn.addEventListener("click", () => {
+        openPopup(btn.dataset.step, btn.dataset.type);
+      });
+    });
+
+    runStep1Btn.addEventListener("click", async () => {
+      runStep1Btn.disabled = true;
+      try {
+        await runStep1();
+      } finally {
+        runStep1Btn.disabled = false;
+      }
+    });
+
+    runStep2Btn.addEventListener("click", async () => {
+      runStep2Btn.disabled = true;
+      try {
+        await runStep2();
+      } finally {
+        runStep2Btn.disabled = false;
+      }
+    });
+
+    runStep3Btn.addEventListener("click", async () => {
+      runStep3Btn.disabled = true;
+      try {
+        await runStep3();
+      } finally {
+        runStep3Btn.disabled = false;
+      }
+    });
+
+    runStep4Btn.addEventListener("click", async () => {
+      runStep4Btn.disabled = true;
+      try {
+        await runStep4();
+      } finally {
+        runStep4Btn.disabled = false;
+      }
+    });
+
+    runStep5Btn.addEventListener("click", async () => {
+      runStep5Btn.disabled = true;
+      try {
+        await runStep5();
+      } finally {
+        runStep5Btn.disabled = false;
+      }
+    });
+
+    popupClose.addEventListener("click", closePopup);
+    popup.addEventListener("click", (event) => {
+      if (event.target === popup) {
+        closePopup();
+      }
+    });
+
+    popupCopy.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(popupText);
+        popupCopy.textContent = "copied";
+      } catch {
+        popupCopy.textContent = "copy failed";
+      }
+    });
+  </script>
+</body>
+</html>
