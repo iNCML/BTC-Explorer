@@ -109,6 +109,30 @@
       cursor: pointer;
     }
 
+    .format-tabs {
+      display: inline-flex;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      overflow: hidden;
+      background: #10192e;
+    }
+
+    .format-tab {
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      padding: 6px 10px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      cursor: pointer;
+      min-width: 62px;
+    }
+
+    .format-tab.active {
+      background: var(--accent);
+      color: #ffffff;
+    }
+
     .step-note {
       margin-top: 4px;
       margin-bottom: 10px;
@@ -394,15 +418,19 @@
 
     <section class="step" id="step5">
       <div class="step-head">
-        <h2 class="step-title">Step 5: Create Wallet xpub (Account Extended Public Key)</h2>
+        <h2 class="step-title">Step 5: Create Wallet Public Key (xpub/zpub)</h2>
         <div class="step-tools">
+          <div class="format-tabs" role="tablist" aria-label="Public key format">
+            <button id="formatXpub" class="format-tab active" type="button" role="tab" aria-selected="true">xpub</button>
+            <button id="formatZpub" class="format-tab" type="button" role="tab" aria-selected="false">zpub</button>
+          </div>
           <button class="run-btn" id="runStep5">Run Step 5</button>
           <button class="mini-link" data-step="step5" data-type="algorithm">algorithm</button>
           <button class="mini-link" data-step="step5" data-type="python">python</button>
           <button class="mini-link" data-step="step5" data-type="code">code</button>
         </div>
       </div>
-      <p class="step-note">Derive account node <span class="mono">m/84'/0'/0'</span>, serialize BIP32 xpub fields, append checksum, and Base58Check-encode to get the final xpub string.</p>
+      <p class="step-note">Derive account node <span class="mono">m/84'/0'/0'</span>, choose version format (<span class="mono">xpub</span> or <span class="mono">zpub</span>), serialize fields, append checksum, and Base58Check-encode.</p>
       <div id="step5Result"></div>
       <div class="status" id="step5Status"></div>
     </section>
@@ -418,7 +446,7 @@
           <button class="mini-link" data-step="step6" data-type="code">code</button>
         </div>
       </div>
-      <p class="step-note">Copy the xpub from Step 5 into the editable box (or modify it), then derive addresses using public derivation only. Step-by-step details are shown for the first address, followed by three more addresses.</p>
+      <p class="step-note">Copy the wallet public key from Step 5 into the editable box (supports both <span class="mono">xpub</span> and <span class="mono">zpub</span>), then derive addresses using public derivation only. Step-by-step details are shown for the first address, followed by three more addresses.</p>
       <div id="step6Result"></div>
       <div class="status" id="step6Status"></div>
     </section>
@@ -451,6 +479,7 @@
     const state = {
       entropy: null,
       entropyBits: 128,
+      pubFormat: "xpub",
       mnemonic: "",
       checksumBits: "",
       mnemonicTable: [],
@@ -637,13 +666,16 @@ for each node:
 // Each additional Derive call advances one level in the BIP32 tree.`
       },
       step5: {
-        algorithm: `Create BIP32 xpub for account path m/84'/0'/0'
+        algorithm: `Create BIP32 Extended Public Key for account path m/84'/0'/0'
 
 account_node = CKDpriv(m, 84') -> CKDpriv(..., 0') -> CKDpriv(..., 0')
 parent_node = m/84'/0'
+choose version:
+  xpub -> 0488B21E
+  zpub -> 04B24746
 
 serialize 78 bytes:
-  version(4)=0488B21E
+  version(4)=selected above
   depth(1)=03
   parent_fingerprint(4)=HASH160(parent_pubkey)[0:4]
   child_number(4)=80000000
@@ -651,7 +683,7 @@ serialize 78 bytes:
   key_data(33)=account_compressed_pubkey
 
 checksum = SHA256(SHA256(serialized))[0:4]
-xpub = Base58Encode(serialized || checksum)`,
+extended_public_key = Base58Encode(serialized || checksum)`,
         python: `# Step 5 - Build xpub manually (Base58Check)
 import hmac, hashlib
 from bip32utils import BIP32Key
@@ -660,8 +692,9 @@ seed = bytes.fromhex("<seed_hex>")
 root = BIP32Key.fromEntropy(seed)
 acct = root.ChildKey(84 + 0x80000000).ChildKey(0 + 0x80000000).ChildKey(0 + 0x80000000)
 parent = root.ChildKey(84 + 0x80000000).ChildKey(0 + 0x80000000)
+fmt = "xpub"  # or "zpub"
+version = bytes.fromhex("0488B21E" if fmt == "xpub" else "04B24746")
 
-version = bytes.fromhex("0488B21E")
 depth = bytes([3])
 parent_fp = hashlib.new("ripemd160", hashlib.sha256(parent.PublicKey()).digest()).digest()[:4]
 child_num = (0x80000000).to_bytes(4, "big")
@@ -684,8 +717,8 @@ for b in full:
         pad += 1
     else:
         break
-xpub = "1" * pad + s
-print("xpub:", xpub)`,
+extpub = "1" * pad + s
+print(fmt + ":", extpub)`,
         code: `// Bitcoin Core xpub serialization path (conceptual):
 // src/pubkey.h / src/pubkey.cpp
 // CExtPubKey::Encode(unsigned char code[BIP32_EXTKEY_SIZE]) const
@@ -698,11 +731,12 @@ print("xpub:", xpub)`,
 // (version/prefix depends on network and key type).`
       },
       step6: {
-        algorithm: `Derive Addresses from xpub (Public Derivation Only)
+        algorithm: `Derive Addresses from xpub/zpub (Public Derivation Only)
 
-input: account xpub at m/84'/0'/0'
-decode Base58Check -> 78-byte extended key payload
+input: account extended public key (xpub or zpub) at m/84'/0'/0'
+decode Base58Check -> 78-byte payload
 parse fields: version, depth, parent fingerprint, child number, chain code, key data
+normalize payload to xpub version for generic CKDpub libraries
 
 CKDpub for external chain:
   m/0 : data = parent_pubkey || index(0)
@@ -716,13 +750,13 @@ CKDpub for first address:
   address = Bech32("bc", v0, witness_program)
 
 repeat m/0/1, m/0/2, m/0/3 for 3 more addresses`,
-        python: `# Step 6 - Derive addresses from account xpub
+        python: `# Step 6 - Derive addresses from account xpub/zpub
 import hmac, hashlib
 from bip32utils import BIP32Key
 import bech32
 
-xpub = "<account_xpub>"
-acct = BIP32Key.fromExtendedKey(xpub)   # public only
+extpub = "<account_xpub_or_zpub>"
+acct = BIP32Key.fromExtendedKey(extpub)   # public only
 external = acct.ChildKey(0)             # m/.../0
 
 def to_p2wpkh(pubkey33: bytes) -> str:
@@ -754,6 +788,8 @@ for i in [1, 2, 3]:
     const runStep4Btn = document.getElementById("runStep4");
     const runStep5Btn = document.getElementById("runStep5");
     const runStep6Btn = document.getElementById("runStep6");
+    const formatXpubBtn = document.getElementById("formatXpub");
+    const formatZpubBtn = document.getElementById("formatZpub");
 
     const step1Result = document.getElementById("step1Result");
     const step2Result = document.getElementById("step2Result");
@@ -782,10 +818,34 @@ for i in [1, 2, 3]:
     let popupText = "";
     const HARDENED_OFFSET = 0x80000000;
     const SECP256K1_N = BigInt("0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141");
+    const XPUB_VERSION = fromHex("0488b21e");
+    const ZPUB_VERSION = fromHex("04b24746");
 
     function setStatus(el, text, ok = false) {
       el.textContent = text;
       el.classList.toggle("ok", ok);
+    }
+
+    function setPubFormat(format) {
+      const next = format === "zpub" ? "zpub" : "xpub";
+      const changed = state.pubFormat !== next;
+      state.pubFormat = next;
+      if (formatXpubBtn && formatZpubBtn) {
+        const xActive = next === "xpub";
+        formatXpubBtn.classList.toggle("active", xActive);
+        formatZpubBtn.classList.toggle("active", !xActive);
+        formatXpubBtn.setAttribute("aria-selected", xActive ? "true" : "false");
+        formatZpubBtn.setAttribute("aria-selected", xActive ? "false" : "true");
+      }
+      if (changed) {
+        state.xpubDetails = null;
+        state.xpubAddressDetails = null;
+        step5Result.innerHTML = "";
+        step6Result.innerHTML = "";
+        if (walletPubInput) walletPubInput.value = "";
+        setStatus(step5Status, `Format changed to ${next}. Run Step 5 to regenerate wallet public key.`);
+        setStatus(step6Status, "");
+      }
     }
 
     function toHex(bytes) {
@@ -1018,13 +1078,14 @@ for i in [1, 2, 3]:
       };
     }
 
-    function buildXpubDetails(root) {
+    function buildXpubDetails(root, format = "xpub") {
       const accountPath = "m/84'/0'/0'";
       const parentPath = "m/84'/0'";
       const accountNode = root.derive(accountPath);
       const parentNode = root.derive(parentPath);
 
-      const version = fromHex("0488b21e");
+      const useZpub = format === "zpub";
+      const version = useZpub ? ZPUB_VERSION : XPUB_VERSION;
       const depth = new Uint8Array([0x03]);
       const parentFingerprint = hash160(parentNode.publicKey).slice(0, 4);
       const childNumber = indexTo4BytesBE(HARDENED_OFFSET);
@@ -1040,9 +1101,10 @@ for i in [1, 2, 3]:
       );
       const checksum = doubleSha256(payload).slice(0, 4);
       const full = concatBytes(payload, checksum);
-      const xpub = base58Encode(full);
+      const extpub = base58Encode(full);
 
       return {
+        format: useZpub ? "zpub" : "xpub",
         accountPath,
         parentPath,
         versionHex: toHex(version),
@@ -1054,16 +1116,16 @@ for i in [1, 2, 3]:
         payloadHex: toHex(payload),
         checksumHex: toHex(checksum),
         fullHex: toHex(full),
-        xpub,
+        extpub,
         xpubFromLibrary: accountNode.publicExtendedKey
       };
     }
 
     function buildAddressDetailsFromXpub(xpubText) {
-      const xpub = xpubText.trim();
-      const decoded = base58Decode(xpub);
+      const inputExtpub = xpubText.trim();
+      const decoded = base58Decode(inputExtpub);
       if (decoded.length !== 82) {
-        throw new Error(`Decoded xpub length is ${decoded.length} bytes (expected 82).`);
+        throw new Error(`Decoded extended public key length is ${decoded.length} bytes (expected 82).`);
       }
       const payload = decoded.slice(0, 78);
       const checksum = decoded.slice(78);
@@ -1079,7 +1141,19 @@ for i in [1, 2, 3]:
       const chainCode = payload.slice(13, 45);
       const keyData = payload.slice(45, 78);
 
-      const accountNode = HDKey.fromExtendedKey(xpub);
+      const versionHex = toHex(version);
+      let inputFormat = "";
+      if (versionHex === toHex(XPUB_VERSION)) inputFormat = "xpub";
+      if (versionHex === toHex(ZPUB_VERSION)) inputFormat = "zpub";
+      if (!inputFormat) {
+        throw new Error(`Unsupported public key prefix/version: ${versionHex}. Use xpub or zpub.`);
+      }
+
+      const payloadAsXpub = concatBytes(XPUB_VERSION, payload.slice(4));
+      const checksumAsXpub = doubleSha256(payloadAsXpub).slice(0, 4);
+      const normalizedXpub = base58Encode(concatBytes(payloadAsXpub, checksumAsXpub));
+
+      const accountNode = HDKey.fromExtendedKey(normalizedXpub);
       const externalNode = accountNode.deriveChild(0);
       const firstNode = externalNode.deriveChild(0);
 
@@ -1108,12 +1182,14 @@ for i in [1, 2, 3]:
       });
 
       return {
-        xpub,
+        inputFormat,
+        inputExtpub,
+        normalizedXpub,
         decodedHex: toHex(decoded),
         payloadHex: toHex(payload),
         checksumHex: toHex(checksum),
         checksumCalcHex: toHex(checksumCalc),
-        versionHex: toHex(version),
+        versionHex,
         depthHex: toHex(depth),
         parentFingerprintHex: toHex(parentFingerprint),
         childNumberHex: toHex(childNumber),
@@ -1420,9 +1496,10 @@ for i in [1, 2, 3]:
       if (!state.xpubDetails) return;
       const d = state.xpubDetails;
       const lines = [
+        `selected_format = ${d.format}`,
         `account_path = ${d.accountPath}`,
         `parent_path = ${d.parentPath}`,
-        `version = 0x0488B21E = ${d.versionHex}`,
+        `version = ${d.versionHex}`,
         `depth = 0x03 = ${d.depthHex}`,
         `parent_fingerprint = HASH160(parent_pubkey)[0:4] = ${d.parentFingerprintHex}`,
         `child_number = 0x80000000 (0') = ${d.childNumberHex}`,
@@ -1431,15 +1508,14 @@ for i in [1, 2, 3]:
         `serialized_payload_78bytes = version || depth || parent_fingerprint || child_number || chain_code || key_data`,
         `payload_hex = ${d.payloadHex}`,
         `checksum = SHA256(SHA256(payload))[0:4] = ${d.checksumHex}`,
-        `xpub_bytes = payload || checksum = ${d.fullHex}`,
-        `xpub = Base58Encode(xpub_bytes) = ${d.xpub}`,
-        `library_xpub = ${d.xpubFromLibrary}`,
-        `matches_library = ${d.xpub === d.xpubFromLibrary}`
+        `extpub_bytes = payload || checksum = ${d.fullHex}`,
+        `${d.format} = Base58Encode(extpub_bytes) = ${d.extpub}`
       ].join("\n");
+      const xpubCompare = d.format === "xpub" ? `\nlibrary_xpub = ${d.xpubFromLibrary}\nmatches_library_xpub = ${d.extpub === d.xpubFromLibrary}` : "";
       step5Result.innerHTML = `
         <div class="result">
-          <h4>Detailed xpub Construction</h4>
-          <pre class="mono">${lines}</pre>
+          <h4>Detailed Extended Public Key Construction</h4>
+          <pre class="mono">${lines}${xpubCompare}</pre>
         </div>
       `;
     }
@@ -1448,8 +1524,10 @@ for i in [1, 2, 3]:
       if (!state.xpubAddressDetails) return;
       const d = state.xpubAddressDetails;
       const firstBlock = [
-        `wallet_public_key_xpub = ${d.xpub}`,
-        `decoded_xpub_bytes = Base58Decode(xpub) = ${d.decodedHex}`,
+        `wallet_public_key_input = ${d.inputExtpub}`,
+        `input_format = ${d.inputFormat}`,
+        `normalized_xpub_for_derivation = ${d.normalizedXpub}`,
+        `decoded_public_key_bytes = Base58Decode(input) = ${d.decodedHex}`,
         `payload_78bytes = ${d.payloadHex}`,
         `checksum(embedded) = ${d.checksumHex}`,
         `checksum(computed) = SHA256(SHA256(payload))[0:4] = ${d.checksumCalcHex}`,
@@ -1460,7 +1538,7 @@ for i in [1, 2, 3]:
         `chain_code = ${d.chainCodeHex}`,
         `key_data(compressed pubkey) = ${d.keyDataHex}`,
         ``,
-        `[A] Derive external chain m/0 from account xpub`,
+        `[A] Derive external chain m/0 from account public key`,
         `index = base_index (0->0x0) + hardened_offset (0x00000000) = 0x00000000`,
         `data = parent_compressed_pubkey || index = ${d.externalDataHex}`,
         `I = HMAC_SHA512(parent_chain_code, data) = ${d.externalIHex}`,
@@ -1483,7 +1561,18 @@ for i in [1, 2, 3]:
         `address = Bech32("bc", [0] + convertbits(witness_program,8->5)) = ${d.firstAddress}`
       ].join("\n");
 
-      const rows = d.more.map(item => `
+      const firstThree = [
+        {
+          index: 0,
+          path: "m/0/0",
+          pubkeyHex: d.firstPubHex,
+          programHex: d.firstProgramHex,
+          address: d.firstAddress
+        },
+        ...d.more.slice(0, 2)
+      ];
+
+      const rows = firstThree.map(item => `
         <tr>
           <td>${item.index}</td>
           <td>${item.path}</td>
@@ -1499,7 +1588,7 @@ for i in [1, 2, 3]:
           <pre class="mono">${firstBlock}</pre>
         </div>
         <div class="result">
-          <h4>Three More Addresses from Same Wallet Public Key</h4>
+          <h4>First Three Addresses from Same Wallet Public Key</h4>
           <table>
             <thead><tr><th>index</th><th>path</th><th>compressed pubkey</th><th>witness program (HASH160)</th><th>address</th></tr></thead>
             <tbody>${rows}</tbody>
@@ -1661,17 +1750,17 @@ for i in [1, 2, 3]:
         setStatus(step5Status, "Run Step 2 first to generate wallet seed.");
         return;
       }
-      setStatus(step5Status, "Constructing xpub from account node...");
+      setStatus(step5Status, `Constructing ${state.pubFormat} from account node...`);
       const root = HDKey.fromMasterSeed(state.seed);
-      state.xpubDetails = buildXpubDetails(root);
+      state.xpubDetails = buildXpubDetails(root, state.pubFormat);
       if (walletPubInput) {
-        walletPubInput.value = state.xpubDetails.xpub;
+        walletPubInput.value = state.xpubDetails.extpub;
       }
       state.xpubAddressDetails = null;
       step6Result.innerHTML = "";
       setStatus(step6Status, "");
       renderStep5();
-      setStatus(step5Status, "Step 5 complete.", true);
+      setStatus(step5Status, `Step 5 complete (${state.pubFormat}).`, true);
     }
 
     async function runStep6() {
@@ -1714,6 +1803,16 @@ for i in [1, 2, 3]:
         openPopup(btn.dataset.step, btn.dataset.type);
       });
     });
+
+    if (formatXpubBtn && formatZpubBtn) {
+      setPubFormat(state.pubFormat);
+      formatXpubBtn.addEventListener("click", () => {
+        setPubFormat("xpub");
+      });
+      formatZpubBtn.addEventListener("click", () => {
+        setPubFormat("zpub");
+      });
+    }
 
     runStep1Btn.addEventListener("click", async () => {
       runStep1Btn.disabled = true;
