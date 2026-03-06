@@ -1,0 +1,1549 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bitcoin Block Management Explorer</title>
+  <style>
+    :root {
+      --bg: #0d1220;
+      --panel: #151e35;
+      --panel-2: #1b2847;
+      --line: #33466f;
+      --text: #e9efff;
+      --muted: #9fb0d8;
+      --accent: #4f8dff;
+      --accent-2: #77a8ff;
+      --ok: #31c46a;
+      --warn: #f2b43f;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(1200px 500px at -20% -20%, rgba(79, 141, 255, 0.28), transparent 60%),
+        radial-gradient(900px 500px at 120% 0%, rgba(84, 199, 165, 0.15), transparent 55%),
+        var(--bg);
+      line-height: 1.42;
+    }
+
+    main {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px 14px 48px;
+    }
+
+    .hero {
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0));
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 14px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(1.3rem, 2.6vw, 2rem);
+    }
+
+    p { margin: 0; color: var(--muted); }
+
+    .step {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 14px;
+      padding: 14px;
+      margin-top: 12px;
+    }
+
+    .step-head {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .step-title {
+      margin: 0;
+      font-size: 1.05rem;
+      color: #f3f7ff;
+    }
+
+    .step-tools {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .select-input {
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      padding: 7px 10px;
+      background: #121a2f;
+      color: var(--text);
+      font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+      font-size: 0.86rem;
+    }
+
+    .run-btn {
+      border: 0;
+      border-radius: 10px;
+      color: white;
+      background: linear-gradient(180deg, var(--accent-2), var(--accent));
+      padding: 8px 12px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 8px 22px rgba(79, 141, 255, 0.3);
+    }
+
+    .run-btn[disabled] {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
+    .mini-link {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--text);
+      background: var(--panel-2);
+      padding: 5px 10px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .step-note {
+      margin-top: 4px;
+      margin-bottom: 10px;
+      color: var(--muted);
+      font-size: 0.94rem;
+    }
+
+    .result {
+      border: 1px solid #2f3f64;
+      background: #11192d;
+      border-radius: 10px;
+      padding: 10px;
+      margin-top: 8px;
+    }
+
+    .result h4 {
+      margin: 0 0 6px;
+      font-size: 0.93rem;
+      color: #dce8ff;
+      letter-spacing: 0.01em;
+    }
+
+    .result-note {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    .kv {
+      margin: 0;
+      font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+      font-size: 0.82rem;
+      color: #d6e3ff;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .mono {
+      font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+      font-size: 0.83rem;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.84rem;
+      margin-top: 6px;
+      overflow: hidden;
+      border-radius: 8px;
+    }
+
+    th, td {
+      border: 1px solid #304064;
+      padding: 7px;
+      text-align: left;
+      vertical-align: top;
+      word-break: break-word;
+    }
+
+    th {
+      background: #1a2746;
+      color: #dce7ff;
+      font-weight: 700;
+    }
+
+    td {
+      background: #121b31;
+      color: #ceddff;
+      font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+      font-size: 0.8rem;
+    }
+
+    .status {
+      margin-top: 8px;
+      color: var(--warn);
+      font-size: 0.88rem;
+    }
+
+    .status.ok { color: var(--ok); }
+
+    details {
+      margin-top: 8px;
+      border: 1px solid #2f3f64;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    summary {
+      cursor: pointer;
+      background: #18233f;
+      padding: 8px 10px;
+      color: #dce7ff;
+      font-weight: 700;
+      font-size: 0.86rem;
+    }
+
+    details .mono {
+      margin: 0;
+      padding: 10px;
+      background: #10182c;
+      max-height: 360px;
+      overflow: auto;
+    }
+
+    .modal.hidden { display: none; }
+
+    .modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(4, 8, 18, 0.85);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      z-index: 999;
+    }
+
+    .modal-card {
+      width: min(980px, 100%);
+      max-height: 86vh;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #10182b;
+      padding: 12px;
+    }
+
+    .modal-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .modal-head h3 {
+      margin: 0;
+      font-size: 1rem;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .modal-actions button {
+      border: 1px solid var(--line);
+      background: var(--panel-2);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 6px 10px;
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 0.8rem;
+    }
+
+    .modal pre {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: #0f1729;
+      border: 1px solid #2a3a60;
+      border-radius: 8px;
+      padding: 10px;
+      font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+      font-size: 0.8rem;
+      line-height: 1.42;
+      color: #d8e5ff;
+    }
+
+    @media (max-width: 860px) {
+      .step-head { align-items: flex-start; }
+      .step-tools { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="hero">
+      <h1>Bitcoin Block Management Explorer</h1>
+      <p>
+        Interactive step-by-step demonstration of block construction in Bitcoin Core-style data formats: transaction serialization, Merkle tree, proof-of-work, block assembly, and partial Merkle verification.
+      </p>
+    </section>
+
+    <section class="step" id="step1">
+      <div class="step-head">
+        <h2 class="step-title">Step 1: Create Random Transactions for a Block Candidate</h2>
+        <div class="step-tools">
+          <select id="txCountSelect" class="select-input" aria-label="Random transaction count">
+            <option value="4" selected>4 transactions</option>
+            <option value="8">8 transactions</option>
+          </select>
+          <button class="run-btn" id="runStep1">Run Step 1</button>
+          <button class="mini-link" data-step="step1" data-type="algorithm">algorithm</button>
+          <button class="mini-link" data-step="step1" data-type="python">python</button>
+          <button class="mini-link" data-step="step1" data-type="code">code</button>
+        </div>
+      </div>
+      <p class="step-note">Choose 4 or 8 random non-coinbase transactions (Core-like serialized bytes and txid). A coinbase transaction is also prepared for later block assembly.</p>
+      <div id="step1Result"></div>
+      <div class="status" id="step1Status"></div>
+    </section>
+
+    <section class="step" id="step2">
+      <div class="step-head">
+        <h2 class="step-title">Step 2: Build Merkle Tree for All Block Transactions</h2>
+        <div class="step-tools">
+          <button class="run-btn" id="runStep2">Run Step 2</button>
+          <button class="mini-link" data-step="step2" data-type="algorithm">algorithm</button>
+          <button class="mini-link" data-step="step2" data-type="python">python</button>
+          <button class="mini-link" data-step="step2" data-type="code">code</button>
+        </div>
+      </div>
+      <p class="step-note">Build the Merkle tree from txids (coinbase + generated random transactions), showing each HASH256(left || right) computation level by level.</p>
+      <div id="step2Result"></div>
+      <div class="status" id="step2Status"></div>
+    </section>
+
+    <section class="step" id="step3">
+      <div class="step-head">
+        <h2 class="step-title">Step 3: Proof-of-Work Mining on the Block Header</h2>
+        <div class="step-tools">
+          <button class="run-btn" id="runStep3">Run Step 3</button>
+          <button class="mini-link" data-step="step3" data-type="algorithm">algorithm</button>
+          <button class="mini-link" data-step="step3" data-type="python">python</button>
+          <button class="mini-link" data-step="step3" data-type="code">code</button>
+        </div>
+      </div>
+      <p class="step-note">Use compact nBits = <span class="mono">0x1f7fffff</span> (easy target) and iterate nonce until block hash <= target. Expected average is well under 1000 hashes.</p>
+      <div id="step3Result"></div>
+      <div class="status" id="step3Status"></div>
+    </section>
+
+    <section class="step" id="step4">
+      <div class="step-head">
+        <h2 class="step-title">Step 4: Assemble Complete Block (Header + Coinbase + Transactions)</h2>
+        <div class="step-tools">
+          <button class="run-btn" id="runStep4">Run Step 4</button>
+          <button class="mini-link" data-step="step4" data-type="algorithm">algorithm</button>
+          <button class="mini-link" data-step="step4" data-type="python">python</button>
+          <button class="mini-link" data-step="step4" data-type="code">code</button>
+        </div>
+      </div>
+      <p class="step-note">Assemble full block bytes: 80-byte header, transaction count varint, coinbase transaction, and all generated transactions.</p>
+      <div id="step4Result"></div>
+      <div class="status" id="step4Status"></div>
+    </section>
+
+    <section class="step" id="step5">
+      <div class="step-head">
+        <h2 class="step-title">Step 5: Verify a Transaction with Partial Merkle Tree</h2>
+        <div class="step-tools">
+          <button class="run-btn" id="runStep5">Run Step 5</button>
+          <button class="mini-link" data-step="step5" data-type="algorithm">algorithm</button>
+          <button class="mini-link" data-step="step5" data-type="python">python</button>
+          <button class="mini-link" data-step="step5" data-type="code">code</button>
+        </div>
+      </div>
+      <p class="step-note">Construct and verify a Bitcoin Core-style partial Merkle tree (total transactions, hashes, flags) to prove membership of one transaction.</p>
+      <div id="step5Result"></div>
+      <div class="status" id="step5Status"></div>
+    </section>
+  </main>
+
+  <div class="modal hidden" id="popup" role="dialog" aria-modal="true" aria-labelledby="popupTitle">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3 id="popupTitle"></h3>
+        <div class="modal-actions">
+          <button id="popupCopy" type="button">copy</button>
+          <button id="popupClose" type="button">Close</button>
+        </div>
+      </div>
+      <pre id="popupBody"></pre>
+    </div>
+  </div>
+
+  <script type="module">
+    import { sha256 } from "https://esm.sh/@noble/hashes@1.5.0/sha256";
+
+    const encoder = new TextEncoder();
+
+    const state = {
+      regularTxs: [],
+      coinbaseTx: null,
+      blockTxs: [],
+      prevBlockHashRaw: null,
+      merkle: null,
+      pow: null,
+      block: null,
+      partial: null
+    };
+
+    const snippets = {
+      step1: {
+        algorithm: `Step 1: Random Transactions (Core-like serialization)
+
+for i in 1..4:
+  create tx fields (version, vin, vout, locktime)
+  serialize exactly as Bitcoin transaction bytes
+  txid_raw = HASH256(serialized_tx)
+  txid_display = reverse(txid_raw)
+
+also prepare coinbase transaction for block assembly`,
+        python: `# Step 1 - simplified transaction serialization + txid
+import os, hashlib, struct
+
+def h256(b):
+    return hashlib.sha256(hashlib.sha256(b).digest()).digest()
+
+def varint(n):
+    if n < 0xfd: return bytes([n])
+    if n <= 0xffff: return b'\xfd' + struct.pack('<H', n)
+    if n <= 0xffffffff: return b'\xfe' + struct.pack('<I', n)
+    return b'\xff' + struct.pack('<Q', n)
+
+version = struct.pack('<I', 2)
+vin_count = varint(1)
+prev_txid_le = os.urandom(32)
+vout = struct.pack('<I', 0)
+script = os.urandom(20)
+script_sig = varint(len(script)) + script
+sequence = bytes.fromhex('ffffffff')
+
+vout_count = varint(1)
+amount = struct.pack('<Q', 120000)
+spk = bytes.fromhex('0014') + os.urandom(20)
+out = amount + varint(len(spk)) + spk
+
+locktime = struct.pack('<I', 0)
+raw = version + vin_count + prev_txid_le + vout + script_sig + sequence + vout_count + out + locktime
+print('txid=', h256(raw)[::-1].hex())`,
+        code: `// Bitcoin Core references:
+// - src/primitives/transaction.h / transaction.cpp (tx structures)
+// - src/serialize.h (serialization macros)
+// - txid is hash256(serialized transaction without witness for legacy txid).`
+      },
+      step2: {
+        algorithm: `Step 2: Merkle Root
+
+leaves = txid_raw list (internal byte order)
+while len(leaves) > 1:
+  if odd count: duplicate last hash
+  parent = HASH256(left || right)
+  next_level.push(parent)
+merkle_root = leaves[0]`,
+        python: `# Step 2 - merkle root
+import hashlib
+
+def h256(b):
+    return hashlib.sha256(hashlib.sha256(b).digest()).digest()
+
+def merkle(hashes):
+    lvl = hashes[:]
+    while len(lvl) > 1:
+        if len(lvl) % 2 == 1:
+            lvl.append(lvl[-1])
+        nxt = []
+        for i in range(0, len(lvl), 2):
+            nxt.append(h256(lvl[i] + lvl[i+1]))
+        lvl = nxt
+    return lvl[0]
+
+# hashes are 32-byte txid_raw values
+# root_display = merkle(hashes)[::-1].hex()`,
+        code: `// Bitcoin Core references:
+// - src/consensus/merkle.cpp
+//   ComputeMerkleRoot(std::vector<uint256> hashes, bool* mutated)
+// same pairwise HASH256(left||right), duplicate odd leaf.`
+      },
+      step3: {
+        algorithm: `Step 3: Proof-of-Work
+
+header = version || prev_block || merkle_root || time || bits || nonce
+for nonce = 0..:
+  h = HASH256(header)
+  if uint256(h) <= target(bits):
+    success`,
+        python: `# Step 3 - PoW header search
+import hashlib, struct
+
+def h256(b):
+    return hashlib.sha256(hashlib.sha256(b).digest()).digest()
+
+def target_from_bits(bits):
+    exp = bits >> 24
+    mant = bits & 0x007fffff
+    if exp <= 3:
+        return mant >> (8 * (3-exp))
+    return mant << (8 * (exp-3))
+
+bits = 0x1f7fffff  # easy target
+T = target_from_bits(bits)
+nonce = 0
+while True:
+    hdr = b'...' + struct.pack('<I', nonce)
+    hv = int.from_bytes(h256(hdr)[::-1], 'big')
+    if hv <= T:
+        break
+    nonce += 1`,
+        code: `// Bitcoin Core references:
+// - src/pow.cpp: CheckProofOfWork
+// - src/primitives/block.h: CBlockHeader
+// nBits compact target decoding and uint256 hash comparison.`
+      },
+      step4: {
+        algorithm: `Step 4: Block Serialization
+
+block_bytes = header_80 || varint(tx_count) || tx1 || tx2 || ...
+block_hash = HASH256(header_80)
+
+include coinbase tx + all regular transactions`,
+        python: `# Step 4 - block bytes
+import hashlib
+
+def h256(b):
+    return hashlib.sha256(hashlib.sha256(b).digest()).digest()
+
+header = b'...'  # 80 bytes from Step 3
+tx_list = [coinbase_raw, tx1_raw, tx2_raw, tx3_raw, tx4_raw]
+block = header + bytes([len(tx_list)]) + b''.join(tx_list)
+print('block_hash=', h256(header)[::-1].hex())
+print('block_size=', len(block))`,
+        code: `// Bitcoin Core references:
+// - src/primitives/block.h / block.cpp
+// - CBlock: nVersion, hashPrevBlock, hashMerkleRoot, nTime, nBits, nNonce
+// - vector<CTransactionRef> vtx serialized with CompactSize count.`
+      },
+      step5: {
+        algorithm: `Step 5: Partial Merkle Verification
+
+build partial tree with matched tx mask:
+  store bits (is-parent-of-match flags)
+  store hashes for leaves/non-matching subtrees
+
+verify by traversing bits+hashes to reconstruct root
+check reconstructed_root == block_merkle_root`,
+        python: `# Step 5 - partial merkle (concept)
+# Build bits[] and hashes[] recursively over full tree.
+# Verify by consuming bits/hashes recursively, reconstruct root,
+# and compare against known merkle root from block header.
+# This mirrors Bitcoin Core's CPartialMerkleTree flow.`,
+        code: `// Bitcoin Core references:
+// - src/merkleblock.cpp
+//   class CPartialMerkleTree
+//   TraverseAndBuild / TraverseAndExtract
+// - src/merkleblock.h
+// used by merkleblock message for SPV proofs.`
+      }
+    };
+
+    const runStep1Btn = document.getElementById("runStep1");
+    const runStep2Btn = document.getElementById("runStep2");
+    const runStep3Btn = document.getElementById("runStep3");
+    const runStep4Btn = document.getElementById("runStep4");
+    const runStep5Btn = document.getElementById("runStep5");
+    const txCountSelect = document.getElementById("txCountSelect");
+
+    const step1Result = document.getElementById("step1Result");
+    const step2Result = document.getElementById("step2Result");
+    const step3Result = document.getElementById("step3Result");
+    const step4Result = document.getElementById("step4Result");
+    const step5Result = document.getElementById("step5Result");
+
+    const step1Status = document.getElementById("step1Status");
+    const step2Status = document.getElementById("step2Status");
+    const step3Status = document.getElementById("step3Status");
+    const step4Status = document.getElementById("step4Status");
+    const step5Status = document.getElementById("step5Status");
+
+    const popup = document.getElementById("popup");
+    const popupTitle = document.getElementById("popupTitle");
+    const popupBody = document.getElementById("popupBody");
+    const popupCopy = document.getElementById("popupCopy");
+    const popupClose = document.getElementById("popupClose");
+
+    let popupText = "";
+
+    function setStatus(el, text, ok = false) {
+      el.textContent = text;
+      el.classList.toggle("ok", ok);
+    }
+
+    function toHex(bytes) {
+      return Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("");
+    }
+
+    function fromHex(hex) {
+      const clean = hex.toLowerCase();
+      if (clean.length % 2 !== 0) throw new Error("Invalid hex length");
+      const out = new Uint8Array(clean.length / 2);
+      for (let i = 0; i < out.length; i += 1) {
+        out[i] = parseInt(clean.slice(i * 2, i * 2 + 2), 16);
+      }
+      return out;
+    }
+
+    function reverseBytes(bytes) {
+      return Uint8Array.from(bytes).reverse();
+    }
+
+    function hashDisplay(rawHash) {
+      return toHex(reverseBytes(rawHash));
+    }
+
+    function concatBytes(...parts) {
+      const total = parts.reduce((n, p) => n + p.length, 0);
+      const out = new Uint8Array(total);
+      let offset = 0;
+      for (const p of parts) {
+        out.set(p, offset);
+        offset += p.length;
+      }
+      return out;
+    }
+
+    function randomBytes(size) {
+      const out = new Uint8Array(size);
+      crypto.getRandomValues(out);
+      return out;
+    }
+
+    function randomInt(min, max) {
+      return min + Math.floor(Math.random() * (max - min + 1));
+    }
+
+    function uint32LE(n) {
+      return new Uint8Array([
+        n & 0xff,
+        (n >>> 8) & 0xff,
+        (n >>> 16) & 0xff,
+        (n >>> 24) & 0xff
+      ]);
+    }
+
+    function uint64LE(n) {
+      let x = BigInt(n);
+      const out = new Uint8Array(8);
+      for (let i = 0; i < 8; i += 1) {
+        out[i] = Number(x & 0xffn);
+        x >>= 8n;
+      }
+      return out;
+    }
+
+    function encodeVarInt(n) {
+      if (n < 0xfd) return new Uint8Array([n]);
+      if (n <= 0xffff) return concatBytes(new Uint8Array([0xfd]), new Uint8Array([n & 0xff, (n >>> 8) & 0xff]));
+      if (n <= 0xffffffff) return concatBytes(new Uint8Array([0xfe]), uint32LE(n));
+      return concatBytes(new Uint8Array([0xff]), uint64LE(n));
+    }
+
+    function hash256(bytes) {
+      return sha256(sha256(bytes));
+    }
+
+    function beHex32(n) {
+      return n.toString(16).padStart(64, "0");
+    }
+
+    function hashToBigInt(rawHash) {
+      return BigInt(`0x${toHex(reverseBytes(rawHash))}`);
+    }
+
+    function joinFields(fields) {
+      return fields.join("'");
+    }
+
+    function joinFieldNames(labels) {
+      return labels.join("||");
+    }
+
+    function p2wpkhScript(program20) {
+      return concatBytes(new Uint8Array([0x00, 0x14]), program20);
+    }
+
+    function encodeHeightScriptNum(height) {
+      let n = height;
+      const out = [];
+      while (n > 0) {
+        out.push(n & 0xff);
+        n >>= 8;
+      }
+      if (out.length === 0) out.push(0x00);
+      if (out[out.length - 1] & 0x80) out.push(0x00);
+      return new Uint8Array(out);
+    }
+
+    function serializeTx(tx) {
+      const fields = [];
+      const seg = [];
+
+      const version = uint32LE(tx.version);
+      fields.push({ label: "version", hex: toHex(version) });
+      seg.push(version);
+
+      const vinCount = encodeVarInt(tx.vin.length);
+      fields.push({ label: "vin_count", hex: toHex(vinCount) });
+      seg.push(vinCount);
+
+      tx.vin.forEach((vin, idx) => {
+        const prevLE = reverseBytes(vin.prevTxidDisplay);
+        const vout = uint32LE(vin.vout);
+        const scriptLen = encodeVarInt(vin.scriptSig.length);
+        const sequence = uint32LE(vin.sequence);
+
+        fields.push({ label: `vin[${idx}].prev_txid_le`, hex: toHex(prevLE) });
+        fields.push({ label: `vin[${idx}].vout`, hex: toHex(vout) });
+        fields.push({ label: `vin[${idx}].script_length`, hex: toHex(scriptLen) });
+        fields.push({ label: `vin[${idx}].scriptSig`, hex: toHex(vin.scriptSig) });
+        fields.push({ label: `vin[${idx}].sequence`, hex: toHex(sequence) });
+
+        seg.push(prevLE, vout, scriptLen, vin.scriptSig, sequence);
+      });
+
+      const voutCount = encodeVarInt(tx.vout.length);
+      fields.push({ label: "vout_count", hex: toHex(voutCount) });
+      seg.push(voutCount);
+
+      tx.vout.forEach((vout, idx) => {
+        const amount = uint64LE(vout.amountSat);
+        const scriptLen = encodeVarInt(vout.scriptPubKey.length);
+        fields.push({ label: `vout[${idx}].amount`, hex: toHex(amount) });
+        fields.push({ label: `vout[${idx}].script_length`, hex: toHex(scriptLen) });
+        fields.push({ label: `vout[${idx}].scriptPubKey`, hex: toHex(vout.scriptPubKey) });
+        seg.push(amount, scriptLen, vout.scriptPubKey);
+      });
+
+      const locktime = uint32LE(tx.locktime);
+      fields.push({ label: "locktime", hex: toHex(locktime) });
+      seg.push(locktime);
+
+      const raw = concatBytes(...seg);
+      const txidRaw = hash256(raw);
+      return {
+        raw,
+        txidRaw,
+        txid: hashDisplay(txidRaw),
+        fields,
+        rawFieldHex: fields.map(f => f.hex)
+      };
+    }
+
+    function createRegularTx(name) {
+      const vin = [{
+        prevTxidDisplay: randomBytes(32),
+        vout: randomInt(0, 3),
+        scriptSig: concatBytes(new Uint8Array([20]), randomBytes(20)),
+        sequence: 0xffffffff
+      }];
+
+      const amount1 = randomInt(60_000, 400_000);
+      const amount2 = randomInt(30_000, 240_000);
+
+      const vout = [
+        { amountSat: amount1, scriptPubKey: p2wpkhScript(randomBytes(20)) },
+        { amountSat: amount2, scriptPubKey: p2wpkhScript(randomBytes(20)) }
+      ];
+
+      const tx = { name, version: 2, vin, vout, locktime: 0 };
+      const s = serializeTx(tx);
+      return { ...tx, ...s };
+    }
+
+    function createCoinbaseTx(height) {
+      const heightEnc = encodeHeightScriptNum(height);
+      const extra = randomBytes(8);
+      const scriptSig = concatBytes(
+        new Uint8Array([heightEnc.length]),
+        heightEnc,
+        new Uint8Array([extra.length]),
+        extra
+      );
+
+      const vin = [{
+        prevTxidDisplay: new Uint8Array(32),
+        vout: 0xffffffff,
+        scriptSig,
+        sequence: 0xffffffff
+      }];
+
+      const rewardSat = 625000000;
+      const vout = [{ amountSat: rewardSat, scriptPubKey: p2wpkhScript(randomBytes(20)) }];
+      const tx = { name: "coinbase", version: 2, vin, vout, locktime: 0, coinbaseHeight: height };
+      const s = serializeTx(tx);
+      return { ...tx, ...s };
+    }
+
+    function buildMerkle(hashes) {
+      const levels = [hashes.slice()];
+      const combine = [];
+      let current = hashes.slice();
+      let level = 0;
+
+      while (current.length > 1) {
+        const next = [];
+        for (let i = 0; i < current.length; i += 2) {
+          const left = current[i];
+          const right = i + 1 < current.length ? current[i + 1] : current[i];
+          const duplicated = i + 1 >= current.length;
+          const parent = hash256(concatBytes(left, right));
+          combine.push({
+            level,
+            pair: i / 2,
+            left,
+            right,
+            duplicated,
+            parent,
+            concatHex: `${toHex(left)}'${toHex(right)}`
+          });
+          next.push(parent);
+        }
+        levels.push(next);
+        current = next;
+        level += 1;
+      }
+
+      return {
+        levels,
+        combine,
+        root: current[0]
+      };
+    }
+
+    function bitsToTarget(bits) {
+      const exponent = bits >>> 24;
+      const mantissa = bits & 0x007fffff;
+      let target;
+      if (exponent <= 3) {
+        target = BigInt(mantissa >>> (8 * (3 - exponent)));
+      } else {
+        target = BigInt(mantissa) << (8n * BigInt(exponent - 3));
+      }
+      return { exponent, mantissa, target };
+    }
+
+    function serializeHeader(version, prevBlockHashRaw, merkleRootRaw, time, bits, nonce) {
+      const fields = [
+        uint32LE(version),
+        prevBlockHashRaw,
+        merkleRootRaw,
+        uint32LE(time),
+        uint32LE(bits),
+        uint32LE(nonce)
+      ];
+      return {
+        raw: concatBytes(...fields),
+        fieldHex: fields.map(f => toHex(f))
+      };
+    }
+
+    function calcTreeWidth(nTx, height) {
+      return (nTx + (1 << height) - 1) >> height;
+    }
+
+    function calcTreeHeight(nTx) {
+      let h = 0;
+      while (calcTreeWidth(nTx, h) > 1) h += 1;
+      return h;
+    }
+
+    function buildPartialMerkle(txHashes, matches) {
+      const nTx = txHashes.length;
+      const height = calcTreeHeight(nTx);
+      const bits = [];
+      const hashes = [];
+      const hashEntries = [];
+      const logs = [];
+      const cache = new Map();
+
+      function calcHash(h, pos) {
+        const key = `${h}:${pos}`;
+        if (cache.has(key)) return cache.get(key);
+        let out;
+        if (h === 0) {
+          out = txHashes[pos];
+        } else {
+          const left = calcHash(h - 1, pos * 2);
+          let right;
+          if (pos * 2 + 1 < calcTreeWidth(nTx, h - 1)) {
+            right = calcHash(h - 1, pos * 2 + 1);
+          } else {
+            right = left;
+          }
+          out = hash256(concatBytes(left, right));
+        }
+        cache.set(key, out);
+        return out;
+      }
+
+      function traverseAndBuild(h, pos) {
+        const start = pos << h;
+        const end = Math.min((pos + 1) << h, nTx);
+        let parentOfMatch = false;
+        for (let p = start; p < end; p += 1) {
+          if (matches[p]) {
+            parentOfMatch = true;
+            break;
+          }
+        }
+
+        bits.push(parentOfMatch);
+        logs.push(`[build h=${h} pos=${pos}] matched_subtree=${parentOfMatch} range=[${start},${end - 1}]`);
+
+        if (h === 0 || !parentOfMatch) {
+          const hash = calcHash(h, pos);
+          hashes.push(hash);
+          hashEntries.push({
+            index: hashes.length - 1,
+            hash,
+            h,
+            pos,
+            rangeStart: start,
+            rangeEnd: end - 1,
+            meaning: h === 0
+              ? (parentOfMatch ? "matched leaf txid" : "unmatched leaf txid")
+              : "subtree hash covering unmatched branch"
+          });
+          logs.push(`  store_hash=${hashDisplay(hash)}`);
+        } else {
+          traverseAndBuild(h - 1, pos * 2);
+          if (pos * 2 + 1 < calcTreeWidth(nTx, h - 1)) {
+            traverseAndBuild(h - 1, pos * 2 + 1);
+          }
+        }
+      }
+
+      traverseAndBuild(height, 0);
+      return { nTx, height, bits, hashes, hashEntries, logs };
+    }
+
+    function bitsToFlagBytes(bits) {
+      const out = new Uint8Array(Math.ceil(bits.length / 8));
+      bits.forEach((bit, i) => {
+        if (bit) out[i >> 3] |= (1 << (i & 7));
+      });
+      return out;
+    }
+
+    function verifyPartialMerkle(partial) {
+      const { nTx, height, bits, hashes } = partial;
+      let bitsUsed = 0;
+      let hashesUsed = 0;
+      const matched = [];
+      const logs = [];
+
+      function traverseAndExtract(h, pos) {
+        if (bitsUsed >= bits.length) throw new Error("Ran out of bits while extracting partial tree");
+        const parentOfMatch = bits[bitsUsed++];
+
+        if (h === 0 || !parentOfMatch) {
+          if (hashesUsed >= hashes.length) throw new Error("Ran out of hashes while extracting partial tree");
+          const hash = hashes[hashesUsed++];
+          logs.push(`[verify h=${h} pos=${pos}] use_hash=${hashDisplay(hash)} parent_match=${parentOfMatch}`);
+          if (h === 0 && parentOfMatch) {
+            matched.push({ index: pos, hash });
+          }
+          return hash;
+        }
+
+        const left = traverseAndExtract(h - 1, pos * 2);
+        let right;
+        if (pos * 2 + 1 < calcTreeWidth(nTx, h - 1)) {
+          right = traverseAndExtract(h - 1, pos * 2 + 1);
+        } else {
+          right = left;
+          logs.push(`[verify h=${h} pos=${pos}] odd-width subtree -> duplicate left child`);
+        }
+
+        const parent = hash256(concatBytes(left, right));
+        logs.push(`[verify h=${h} pos=${pos}] parent=HASH256(left||right)=${hashDisplay(parent)}`);
+        return parent;
+      }
+
+      const root = traverseAndExtract(height, 0);
+      const fullyConsumed = bitsUsed === bits.length && hashesUsed === hashes.length;
+      return { root, matched, logs, bitsUsed, hashesUsed, fullyConsumed };
+    }
+
+    function resetAfterStep1() {
+      state.merkle = null;
+      state.pow = null;
+      state.block = null;
+      state.partial = null;
+      step2Result.innerHTML = "";
+      step3Result.innerHTML = "";
+      step4Result.innerHTML = "";
+      step5Result.innerHTML = "";
+      setStatus(step2Status, "");
+      setStatus(step3Status, "");
+      setStatus(step4Status, "");
+      setStatus(step5Status, "");
+    }
+
+    function renderStep1() {
+      const txRows = state.regularTxs.map((tx, i) => `
+        <tr>
+          <td>${i + 1}</td>
+          <td>${tx.name}</td>
+          <td>${tx.raw.length}</td>
+          <td>${tx.txid}</td>
+        </tr>
+      `).join("");
+
+      const txDetails = state.regularTxs.map((tx, i) => {
+        const txFieldNames = joinFieldNames(tx.fields.map(f => f.label));
+        const lines = [
+          `tx_name = ${tx.name}`,
+          `vin_count = ${tx.vin.length}`,
+          `vout_count = ${tx.vout.length}`,
+          `input.prev_txid(display_big_endian) = ${toHex(tx.vin[0].prevTxidDisplay)}`,
+          `input.prev_txid(in_tx_little_endian) = ${toHex(reverseBytes(tx.vin[0].prevTxidDisplay))}`,
+          `input.vout = ${tx.vin[0].vout} => ${toHex(uint32LE(tx.vin[0].vout))}`,
+          `input.scriptSig = ${toHex(tx.vin[0].scriptSig)}`,
+          `input.sequence = ${toHex(uint32LE(tx.vin[0].sequence) )}`,
+          `output0.amount_sat = ${tx.vout[0].amountSat} => ${toHex(uint64LE(tx.vout[0].amountSat))}`,
+          `output0.scriptPubKey = ${toHex(tx.vout[0].scriptPubKey)}`,
+          `output1.amount_sat = ${tx.vout[1].amountSat} => ${toHex(uint64LE(tx.vout[1].amountSat))}`,
+          `output1.scriptPubKey = ${toHex(tx.vout[1].scriptPubKey)}`,
+          `tx_bytes_fields = ${txFieldNames}`,
+          `tx_bytes = ${joinFields(tx.rawFieldHex)}`,
+          `txid = HASH256(tx_bytes) reversed = ${tx.txid}`
+        ];
+        return `
+          <details>
+            <summary>Transaction ${i + 1} (${tx.name}) detailed computations</summary>
+            <pre class="mono">${lines.join("\n")}</pre>
+          </details>
+        `;
+      }).join("");
+
+      const coinbaseFieldNames = joinFieldNames(state.coinbaseTx.fields.map(f => f.label));
+      const coinbaseLines = [
+        `coinbase_height = ${state.coinbaseTx.coinbaseHeight}`,
+        `coinbase_txid = ${state.coinbaseTx.txid}`,
+        `coinbase_tx_bytes_fields = ${coinbaseFieldNames}`,
+        `coinbase_tx_bytes = ${joinFields(state.coinbaseTx.rawFieldHex)}`
+      ].join("\n");
+
+      step1Result.innerHTML = `
+        <div class="result">
+          <h4>Generated Transactions (Core-like Serialized Format)</h4>
+          <div class="kv">prev_block_hash(display_big_endian) = ${hashDisplay(state.prevBlockHashRaw)}\nprepared_coinbase_txid = ${state.coinbaseTx.txid}\nblock_tx_count_for_next_steps = ${state.blockTxs.length} (1 coinbase + ${state.regularTxs.length} random)</div>
+          <table>
+            <thead><tr><th>#</th><th>name</th><th>size(bytes)</th><th>txid (display)</th></tr></thead>
+            <tbody>${txRows}</tbody>
+          </table>
+        </div>
+        <div class="result">
+          <h4>Coinbase Prepared for Block Assembly</h4>
+          <pre class="mono">${coinbaseLines}</pre>
+        </div>
+        ${txDetails}
+      `;
+    }
+
+    function renderStep2() {
+      const txListRows = state.blockTxs.map((tx, i) => `
+        <tr>
+          <td>${i}</td>
+          <td>${tx.name}</td>
+          <td>${tx.txid}</td>
+        </tr>
+      `).join("");
+
+      const combineText = state.merkle.combine.map(item => {
+        const lines = [
+          `[L${item.level} pair${item.pair}] parent = HASH256(left || right)`,
+          `left = ${hashDisplay(item.left)}`,
+          `right = ${hashDisplay(item.right)}${item.duplicated ? " (duplicated)" : ""}`,
+          `concat(left||right)_internal = ${item.concatHex}`,
+          `parent = ${hashDisplay(item.parent)}`
+        ];
+        return lines.join("\n");
+      }).join("\n\n");
+
+      step2Result.innerHTML = `
+        <div class="result">
+          <h4>Transactions Used in Merkle Tree</h4>
+          <table>
+            <thead><tr><th>index</th><th>type</th><th>txid (display)</th></tr></thead>
+            <tbody>${txListRows}</tbody>
+          </table>
+        </div>
+        <div class="result">
+          <h4>Merkle Pairwise HASH256 Computations</h4>
+          <pre class="mono">${combineText}</pre>
+          <p class="result-note">Merkle root (display): <span class="mono">${hashDisplay(state.merkle.root)}</span></p>
+        </div>
+      `;
+    }
+
+    function renderStep3() {
+      const p = state.pow;
+      const headerLines = [
+        `version_le = ${p.headerFieldHex[0]}`,
+        `prev_block_hash_le = ${p.headerFieldHex[1]}`,
+        `merkle_root_le = ${p.headerFieldHex[2]}`,
+        `time_le = ${p.headerFieldHex[3]} (${p.time})`,
+        `bits_le = ${p.headerFieldHex[4]} (nBits=${p.bitsHex})`,
+        `nonce_le = ${p.headerFieldHex[5]} (nonce=${p.nonce})`,
+        `header_80bytes_fields = version||prev_block_hash||merkle_root||time||bits||nonce`,
+        `header_80bytes = ${joinFields(p.headerFieldHex)}`
+      ].join("\n");
+
+      const attemptLines = p.attemptsPreview.map((a, i) => `attempt_${i + 1}: nonce=${a.nonce}, hash=${a.hash}`).concat([
+        "...",
+        `success_attempt: nonce=${p.nonce}, hash=${p.hashDisplay}`
+      ]).join("\n");
+
+      const summary = [
+        `bits = ${p.bitsHex}`,
+        `target_exponent = 0x${p.exponent.toString(16)}`,
+        `target_mantissa = 0x${p.mantissa.toString(16)}`,
+        `target_value = 0x${p.targetHex}`,
+        `hashes_tried = ${p.hashesTried}`,
+        `final_block_hash = ${p.hashDisplay}`,
+        `valid = hash <= target => ${p.valid}`
+      ].join("\n");
+
+      step3Result.innerHTML = `
+        <div class="result">
+          <h4>Proof-of-Work Target and Result</h4>
+          <pre class="mono">${summary}</pre>
+        </div>
+        <div class="result">
+          <h4>Header Serialization (Bitcoin Core Field Order)</h4>
+          <pre class="mono">${headerLines}</pre>
+        </div>
+        <div class="result">
+          <h4>Nonce Search Trace</h4>
+          <pre class="mono">${attemptLines}</pre>
+        </div>
+      `;
+    }
+
+    function renderStep4() {
+      const b = state.block;
+      const header = state.pow;
+      const lastTxIdx = b.transactions.length - 1;
+      const blockFieldsShort = lastTxIdx >= 0
+        ? `header_80bytes||tx_count||tx[0]||...||tx[${lastTxIdx}]`
+        : "header_80bytes||tx_count";
+      const txRows = b.transactions.map((tx, i) => `
+        <tr>
+          <td>${i}</td>
+          <td>${tx.name}</td>
+          <td>${tx.raw.length}</td>
+          <td>${tx.txid}</td>
+        </tr>
+      `).join("");
+
+      const lines = [
+        `block_bytes_fields = ${blockFieldsShort}`,
+        `header_80bytes = ${joinFields(header.headerFieldHex)}`,
+        `tx_count_varint = ${b.txCountHex}`,
+        `coinbase_txid = ${state.coinbaseTx.txid}`,
+        `merkle_root_in_header = ${hashDisplay(state.merkle.root)}`,
+        `block_hash = HASH256(header) reversed = ${b.blockHash}`,
+        `block_bytes = ${joinFields(b.fieldHex)}`,
+        `block_size_bytes = ${b.raw.length}`
+      ].join("\n");
+
+      step4Result.innerHTML = `
+        <div class="result">
+          <h4>Final Block Record</h4>
+          <pre class="mono">${lines}</pre>
+        </div>
+        <div class="result">
+          <h4>Transactions Stored in the Block</h4>
+          <table>
+            <thead><tr><th>index</th><th>type</th><th>size(bytes)</th><th>txid (display)</th></tr></thead>
+            <tbody>${txRows}</tbody>
+          </table>
+          <p class="result-note">Block serialization format: <span class="mono">header(80) || tx_count || tx[0..n-1]</span>. Tx count and script lengths use CompactSize varints.</p>
+        </div>
+      `;
+    }
+
+    function renderStep5() {
+      const p = state.partial;
+      const hashRows = p.hashEntries.map(entry => `
+        <tr>
+          <td>${entry.index}</td>
+          <td>${entry.hashDisplay}</td>
+          <td>${entry.h}</td>
+          <td>${entry.pos}</td>
+          <td>[${entry.rangeStart}, ${entry.rangeEnd}]</td>
+          <td>${entry.meaning}</td>
+        </tr>
+      `).join("");
+
+      const verifyLines = [
+        `selected_tx_index = ${p.matchIndex}`,
+        `selected_txid = ${p.matchTxid}`,
+        `total_transactions = ${p.nTx}`,
+        `flags_bits = ${p.bitsString}`,
+        `flags_bytes = ${p.flagsHex}`,
+        `hash_count = ${p.hashesDisplay.length}`,
+        `partial_merkle_payload = total_tx(${p.totalTxHex})'hash_count(${p.hashCountHex})'hashes...'flag_count(${p.flagCountHex})'flags(${p.flagsHex})`,
+        `reconstructed_merkle_root = ${p.reconstructedRoot}`,
+        `header_merkle_root = ${p.headerMerkleRoot}`,
+        `matched_txids = ${p.matchedTxids.join(", ")}`,
+        `fully_consumed(bits+hashes) = ${p.fullyConsumed}`,
+        `verification = ${p.valid ? "VALID" : "INVALID"}`
+      ].join("\n");
+
+      step5Result.innerHTML = `
+        <div class="result">
+          <h4>Partial Merkle Tree Fields (Bitcoin Core Style)</h4>
+          <pre class="mono">${verifyLines}</pre>
+          <p class="result-note"><span class="mono">hashes[0]</span>, <span class="mono">hashes[1]</span>, ... are the ordered hash vector in the partial-Merkle payload. The verifier consumes these in sequence while traversing the tree according to flag bits.</p>
+          <table>
+            <thead><tr><th>hash index</th><th>hash (display)</th><th>h</th><th>pos</th><th>covered tx range</th><th>meaning</th></tr></thead>
+            <tbody>${hashRows}</tbody>
+          </table>
+          <p class="result-note">In build/verify trace, <span class="mono">h</span> is subtree height (<span class="mono">h=0</span> means leaf txid), and <span class="mono">pos</span> is the node position at that height (left-to-right, 0-based).</p>
+        </div>
+        <details>
+          <summary>Partial Merkle Build Trace</summary>
+          <pre class="mono">${p.buildLogs}</pre>
+        </details>
+        <details>
+          <summary>Partial Merkle Verify Trace</summary>
+          <pre class="mono">${p.verifyLogs}</pre>
+        </details>
+      `;
+    }
+
+    async function runStep1() {
+      const selectedCount = txCountSelect ? parseInt(txCountSelect.value, 10) : 4;
+      const regularCount = selectedCount === 8 ? 8 : 4;
+      setStatus(step1Status, `Generating ${regularCount} random transactions and coinbase...`);
+
+      const coinbaseHeight = randomInt(860000, 900000);
+      const coinbaseTx = createCoinbaseTx(coinbaseHeight);
+      const regularTxs = Array.from({ length: regularCount }, (_, i) => createRegularTx(`tx-${i + 1}`));
+
+      state.coinbaseTx = coinbaseTx;
+      state.regularTxs = regularTxs;
+      state.blockTxs = [coinbaseTx, ...regularTxs];
+      state.prevBlockHashRaw = randomBytes(32);
+
+      resetAfterStep1();
+      renderStep1();
+      setStatus(step1Status, `Step 1 complete (${regularCount} random transactions).`, true);
+    }
+
+    async function runStep2() {
+      if (!state.blockTxs.length) {
+        setStatus(step2Status, "Run Step 1 first.");
+        return;
+      }
+
+      setStatus(step2Status, "Computing Merkle tree...");
+      const txHashes = state.blockTxs.map(tx => tx.txidRaw);
+      state.merkle = buildMerkle(txHashes);
+
+      state.pow = null;
+      state.block = null;
+      state.partial = null;
+      step3Result.innerHTML = "";
+      step4Result.innerHTML = "";
+      step5Result.innerHTML = "";
+      setStatus(step3Status, "");
+      setStatus(step4Status, "");
+      setStatus(step5Status, "");
+
+      renderStep2();
+      setStatus(step2Status, "Step 2 complete.", true);
+    }
+
+    async function runStep3() {
+      if (!state.merkle) {
+        setStatus(step3Status, "Run Step 2 first.");
+        return;
+      }
+
+      setStatus(step3Status, "Running proof-of-work nonce search...");
+      const version = 0x20000000;
+      const bits = 0x1f7fffff;
+      const time = Math.floor(Date.now() / 1000);
+      const targetInfo = bitsToTarget(bits);
+      const bitsHex = bits.toString(16).padStart(8, "0");
+
+      let nonce = 0;
+      let hashesTried = 0;
+      let found = null;
+      const attemptsPreview = [];
+
+      while (nonce <= 0xffffffff) {
+        const hdr = serializeHeader(version, state.prevBlockHashRaw, state.merkle.root, time, bits, nonce);
+        const hRaw = hash256(hdr.raw);
+        const hVal = hashToBigInt(hRaw);
+        hashesTried += 1;
+
+        if (attemptsPreview.length < 5) {
+          attemptsPreview.push({ nonce, hash: hashDisplay(hRaw) });
+        }
+
+        if (hVal <= targetInfo.target) {
+          found = { nonce, hdr, hRaw, hVal };
+          break;
+        }
+
+        nonce += 1;
+        if (nonce % 3000 === 0) {
+          await new Promise(resolve => setTimeout(resolve, 0));
+        }
+      }
+
+      if (!found) {
+        setStatus(step3Status, "Step 3 failed: nonce range exhausted without valid hash.");
+        return;
+      }
+
+      state.pow = {
+        version,
+        bits,
+        bitsHex,
+        time,
+        nonce: found.nonce,
+        headerRaw: found.hdr.raw,
+        headerFieldHex: found.hdr.fieldHex,
+        hashRaw: found.hRaw,
+        hashDisplay: hashDisplay(found.hRaw),
+        targetHex: beHex32(targetInfo.target),
+        exponent: targetInfo.exponent,
+        mantissa: targetInfo.mantissa,
+        hashesTried,
+        attemptsPreview,
+        valid: true
+      };
+
+      state.block = null;
+      state.partial = null;
+      step4Result.innerHTML = "";
+      step5Result.innerHTML = "";
+      setStatus(step4Status, "");
+      setStatus(step5Status, "");
+
+      renderStep3();
+      setStatus(step3Status, `Step 3 complete (${hashesTried} hashes).`, true);
+    }
+
+    async function runStep4() {
+      if (!state.pow || !state.blockTxs.length) {
+        setStatus(step4Status, "Run Step 1-3 first.");
+        return;
+      }
+
+      setStatus(step4Status, "Assembling full block record...");
+      const txCount = encodeVarInt(state.blockTxs.length);
+      const fieldHex = [...state.pow.headerFieldHex, toHex(txCount)];
+      const fieldNames = [
+        "header.version",
+        "header.prev_block_hash",
+        "header.merkle_root",
+        "header.time",
+        "header.bits",
+        "header.nonce",
+        "tx_count"
+      ];
+      const seg = [state.pow.headerRaw, txCount];
+      state.blockTxs.forEach((tx, i) => {
+        seg.push(tx.raw);
+        fieldHex.push(toHex(tx.raw));
+        fieldNames.push(`tx[${i}]`);
+      });
+      const raw = concatBytes(...seg);
+      const blockHash = hashDisplay(hash256(state.pow.headerRaw));
+
+      state.block = {
+        raw,
+        fieldHex,
+        fieldNames,
+        txCountHex: toHex(txCount),
+        blockHash,
+        transactions: state.blockTxs
+      };
+
+      state.partial = null;
+      step5Result.innerHTML = "";
+      setStatus(step5Status, "");
+
+      renderStep4();
+      setStatus(step4Status, "Step 4 complete.", true);
+    }
+
+    async function runStep5() {
+      if (!state.block || !state.merkle) {
+        setStatus(step5Status, "Run Step 1-4 first.");
+        return;
+      }
+
+      setStatus(step5Status, "Building and verifying partial Merkle tree...");
+
+      const nTx = state.blockTxs.length;
+      const matchIndex = Math.min(2, nTx - 1);
+      const matches = new Array(nTx).fill(false);
+      matches[matchIndex] = true;
+
+      const txHashes = state.blockTxs.map(tx => tx.txidRaw);
+      const partial = buildPartialMerkle(txHashes, matches);
+      const verify = verifyPartialMerkle(partial);
+
+      const flags = bitsToFlagBytes(partial.bits);
+      const totalTxHex = toHex(uint32LE(nTx));
+      const hashCountHex = toHex(encodeVarInt(partial.hashes.length));
+      const flagCountHex = toHex(encodeVarInt(flags.length));
+
+      state.partial = {
+        nTx,
+        matchIndex,
+        matchTxid: state.blockTxs[matchIndex].txid,
+        bitsString: partial.bits.map(b => (b ? "1" : "0")).join(""),
+        flagsHex: toHex(flags),
+        totalTxHex,
+        hashCountHex,
+        flagCountHex,
+        hashesDisplay: partial.hashes.map(hashDisplay),
+        hashEntries: partial.hashEntries.map(e => ({
+          index: e.index,
+          hashDisplay: hashDisplay(e.hash),
+          h: e.h,
+          pos: e.pos,
+          rangeStart: e.rangeStart,
+          rangeEnd: e.rangeEnd,
+          meaning: e.meaning
+        })),
+        reconstructedRoot: hashDisplay(verify.root),
+        headerMerkleRoot: hashDisplay(state.merkle.root),
+        matchedTxids: verify.matched.map(m => hashDisplay(m.hash)),
+        fullyConsumed: verify.fullyConsumed,
+        valid: verify.fullyConsumed && hashDisplay(verify.root) === hashDisplay(state.merkle.root),
+        buildLogs: partial.logs.join("\n"),
+        verifyLogs: verify.logs.join("\n")
+      };
+
+      renderStep5();
+      setStatus(step5Status, `Step 5 complete (${state.partial.valid ? "VALID" : "INVALID"}).`, state.partial.valid);
+    }
+
+    function openPopup(step, type) {
+      const source = snippets[step] && snippets[step][type];
+      if (!source) return;
+      popupTitle.textContent = `${type} - ${step.replace("step", "Step ")}`;
+      popupBody.textContent = source;
+      popupText = source;
+      popupCopy.textContent = "copy";
+      popup.classList.remove("hidden");
+    }
+
+    function closePopup() {
+      popup.classList.add("hidden");
+    }
+
+    document.querySelectorAll(".mini-link").forEach(btn => {
+      btn.addEventListener("click", () => openPopup(btn.dataset.step, btn.dataset.type));
+    });
+
+    runStep1Btn.addEventListener("click", async () => {
+      runStep1Btn.disabled = true;
+      try {
+        await runStep1();
+      } catch (err) {
+        const msg = err && err.message ? err.message : String(err);
+        setStatus(step1Status, `Step 1 failed: ${msg}`);
+      } finally {
+        runStep1Btn.disabled = false;
+      }
+    });
+
+    runStep2Btn.addEventListener("click", async () => {
+      runStep2Btn.disabled = true;
+      try {
+        await runStep2();
+      } finally {
+        runStep2Btn.disabled = false;
+      }
+    });
+
+    runStep3Btn.addEventListener("click", async () => {
+      runStep3Btn.disabled = true;
+      try {
+        await runStep3();
+      } finally {
+        runStep3Btn.disabled = false;
+      }
+    });
+
+    runStep4Btn.addEventListener("click", async () => {
+      runStep4Btn.disabled = true;
+      try {
+        await runStep4();
+      } finally {
+        runStep4Btn.disabled = false;
+      }
+    });
+
+    runStep5Btn.addEventListener("click", async () => {
+      runStep5Btn.disabled = true;
+      try {
+        await runStep5();
+      } finally {
+        runStep5Btn.disabled = false;
+      }
+    });
+
+    popupClose.addEventListener("click", closePopup);
+    popup.addEventListener("click", event => {
+      if (event.target === popup) closePopup();
+    });
+
+    popupCopy.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(popupText);
+        popupCopy.textContent = "copied";
+      } catch {
+        popupCopy.textContent = "copy failed";
+      }
+    });
+  </script>
+</body>
+</html>
