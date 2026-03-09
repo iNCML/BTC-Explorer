@@ -1,0 +1,1983 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lightning Channel Explorer</title>
+  <style>
+    :root {
+      --bg: #0d1220;
+      --panel: #151e35;
+      --panel-2: #1b2847;
+      --line: #33466f;
+      --text: #e9efff;
+      --muted: #9fb0d8;
+      --accent: #4f8dff;
+      --accent-2: #77a8ff;
+      --ok: #31c46a;
+      --warn: #f2b43f;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(1200px 500px at -20% -20%, rgba(79, 141, 255, 0.28), transparent 60%),
+        radial-gradient(900px 500px at 120% 0%, rgba(84, 199, 165, 0.15), transparent 55%),
+        var(--bg);
+      line-height: 1.42;
+    }
+
+    main {
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: 24px 14px 48px;
+    }
+
+    .hero {
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0));
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 14px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(1.3rem, 2.6vw, 2rem);
+    }
+
+    p { margin: 0; color: var(--muted); }
+
+    .step {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 14px;
+      padding: 14px;
+      margin-top: 12px;
+    }
+
+    .step-head {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .step-title {
+      margin: 0;
+      font-size: 1.05rem;
+      color: #f3f7ff;
+    }
+
+    .step-tools {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .run-btn {
+      border: 0;
+      border-radius: 10px;
+      color: white;
+      background: linear-gradient(180deg, var(--accent-2), var(--accent));
+      padding: 8px 12px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 8px 22px rgba(79, 141, 255, 0.3);
+    }
+
+    .run-btn[disabled] {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
+    .mini-link {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--text);
+      background: var(--panel-2);
+      padding: 5px 10px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .select-input {
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      padding: 7px 10px;
+      background: #121a2f;
+      color: var(--text);
+      font-size: 0.86rem;
+      min-width: 280px;
+    }
+
+    .step-note {
+      margin-top: 4px;
+      margin-bottom: 10px;
+      color: var(--muted);
+      font-size: 0.94rem;
+    }
+
+    .result {
+      border: 1px solid #2f3f64;
+      background: #11192d;
+      border-radius: 10px;
+      padding: 10px;
+      margin-top: 8px;
+    }
+
+    .result h4 {
+      margin: 0 0 6px;
+      font-size: 0.93rem;
+      color: #dce8ff;
+      letter-spacing: 0.01em;
+    }
+
+    .result-note {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    .kv {
+      margin: 0;
+      font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+      font-size: 0.82rem;
+      color: #d6e3ff;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .mono {
+      font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+      font-size: 0.83rem;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.84rem;
+      margin-top: 6px;
+      overflow: hidden;
+      border-radius: 8px;
+    }
+
+    th, td {
+      border: 1px solid #304064;
+      padding: 7px;
+      text-align: left;
+      vertical-align: top;
+      word-break: break-word;
+    }
+
+    th {
+      background: #1a2746;
+      color: #dce7ff;
+      font-weight: 700;
+    }
+
+    td {
+      background: #121b31;
+      color: #ceddff;
+      font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+      font-size: 0.8rem;
+    }
+
+    .status {
+      margin-top: 8px;
+      color: var(--warn);
+      font-size: 0.88rem;
+    }
+
+    .status.ok { color: var(--ok); }
+
+    details {
+      margin-top: 8px;
+      border: 1px solid #2f3f64;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    summary {
+      cursor: pointer;
+      background: #18233f;
+      padding: 8px 10px;
+      color: #dce7ff;
+      font-weight: 700;
+      font-size: 0.86rem;
+    }
+
+    details .mono {
+      margin: 0;
+      padding: 10px;
+      background: #10182c;
+      max-height: 360px;
+      overflow: auto;
+    }
+
+    .modal.hidden { display: none; }
+
+    .modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(4, 8, 18, 0.85);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      z-index: 999;
+    }
+
+    .modal-card {
+      width: min(980px, 100%);
+      max-height: 86vh;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #10182b;
+      padding: 12px;
+    }
+
+    .modal-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .modal-head h3 {
+      margin: 0;
+      font-size: 1rem;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .modal-actions button {
+      border: 1px solid var(--line);
+      background: var(--panel-2);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 6px 10px;
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 0.8rem;
+    }
+
+    .modal pre {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: #0f1729;
+      border: 1px solid #2a3a60;
+      border-radius: 8px;
+      padding: 10px;
+      font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+      font-size: 0.8rem;
+      line-height: 1.42;
+      color: #d8e5ff;
+    }
+
+    @media (max-width: 860px) {
+      .step-head { align-items: flex-start; }
+      .step-tools { width: 100%; }
+      .select-input { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="hero">
+      <h1>Lightning Channel Explorer</h1>
+      <p>
+        Step-by-step walkthrough of a Lightning channel between Alice and Bob: key/basepoint setup, channel opening, commitment updates, revocation, force-close/cheat scenarios, and channel close paths using Bitcoin transactions.
+      </p>
+    </section>
+
+    <section class="step" id="step1">
+      <div class="step-head">
+        <h2 class="step-title">Step 1: Generate Alice/Bob Keys, Addresses, and Basepoints</h2>
+        <div class="step-tools">
+          <button class="run-btn" id="runStep1">Run Step 1</button>
+          <button class="mini-link" data-step="step1" data-type="algorithm">algorithm</button>
+          <button class="mini-link" data-step="step1" data-type="python">python</button>
+          <button class="mini-link" data-step="step1" data-type="code">code</button>
+        </div>
+      </div>
+      <p class="step-note">Create static key material for each peer: node key, funding key, and LN basepoints (payment, delayed-payment, revocation, HTLC), plus first per-commitment point.</p>
+      <div id="step1Result"></div>
+      <div class="status" id="step1Status"></div>
+    </section>
+
+    <section class="step" id="step2">
+      <div class="step-head">
+        <h2 class="step-title">Step 2: Open 2 BTC Channel (Alice 1 BTC + Bob 1 BTC)</h2>
+        <div class="step-tools">
+          <button class="run-btn" id="runStep2">Run Step 2</button>
+          <button class="mini-link" data-step="step2" data-type="algorithm">algorithm</button>
+          <button class="mini-link" data-step="step2" data-type="python">python</button>
+          <button class="mini-link" data-step="step2" data-type="code">code</button>
+        </div>
+      </div>
+      <p class="step-note">Show BOLT-like opening flow (open_channel, accept_channel, funding_created, funding_signed, channel_ready), funding transaction, and initial commitment transactions for both sides.</p>
+      <div id="step2Result"></div>
+      <div class="status" id="step2Status"></div>
+    </section>
+
+    <section class="step" id="step3">
+      <div class="step-head">
+        <h2 class="step-title">Step 3: Update State (Alice Pays Bob 0.2 BTC)</h2>
+        <div class="step-tools">
+          <button class="run-btn" id="runStep3">Run Step 3</button>
+          <button class="mini-link" data-step="step3" data-type="algorithm">algorithm</button>
+          <button class="mini-link" data-step="step3" data-type="python">python</button>
+          <button class="mini-link" data-step="step3" data-type="code">code</button>
+        </div>
+      </div>
+      <p class="step-note">Update balances to new commitment state, derive new per-commitment keys/scripts, and show revocation exchange that invalidates the previous state.</p>
+      <div id="step3Result"></div>
+      <div class="status" id="step3Status"></div>
+    </section>
+
+    <section class="step" id="step4">
+      <div class="step-head">
+        <h2 class="step-title">Step 4: Choose Next Action (Update / Force Close / Cheat)</h2>
+        <div class="step-tools">
+          <select id="step4Action" class="select-input" aria-label="Step 4 action">
+            <option value="alice_pay_01" selected>i) proceed next transaction: Alice pays Bob 0.1 BTC</option>
+            <option value="alice_force">ii) Alice force close</option>
+            <option value="bob_force">iii) Bob force close</option>
+            <option value="alice_cheat">iv) Alice cheats by broadcasting outdated state</option>
+            <option value="bob_cheat">v) Bob cheats by broadcasting outdated state</option>
+          </select>
+          <button class="run-btn" id="runStep4">Run Step 4</button>
+          <button class="mini-link" data-step="step4" data-type="algorithm">algorithm</button>
+          <button class="mini-link" data-step="step4" data-type="python">python</button>
+          <button class="mini-link" data-step="step4" data-type="code">code</button>
+        </div>
+      </div>
+      <p class="step-note">Apply selected path and show exact state transition and on-chain consequence. Force-close and cheat paths close the channel immediately.</p>
+      <div id="step4Result"></div>
+      <div class="status" id="step4Status"></div>
+    </section>
+
+    <section class="step" id="step5">
+      <div class="step-head">
+        <h2 class="step-title">Step 5: Next Update (Bob Pays Alice 0.5 BTC)</h2>
+        <div class="step-tools">
+          <button class="run-btn" id="runStep5">Run Step 5</button>
+          <button class="mini-link" data-step="step5" data-type="algorithm">algorithm</button>
+          <button class="mini-link" data-step="step5" data-type="python">python</button>
+          <button class="mini-link" data-step="step5" data-type="code">code</button>
+        </div>
+      </div>
+      <p class="step-note">If channel remains open, produce next commitment state and revocations for payment Bob -> Alice 0.5 BTC.</p>
+      <div id="step5Result"></div>
+      <div class="status" id="step5Status"></div>
+    </section>
+
+    <section class="step" id="step6">
+      <div class="step-head">
+        <h2 class="step-title">Step 6: Choose Channel Close Method</h2>
+        <div class="step-tools">
+          <select id="step6Action" class="select-input" aria-label="Step 6 close action">
+            <option value="coop" selected>i) cooperative close</option>
+            <option value="alice_force">ii) Alice force close</option>
+            <option value="bob_force">iii) Bob force close</option>
+          </select>
+          <button class="run-btn" id="runStep6">Run Step 6</button>
+          <button class="mini-link" data-step="step6" data-type="algorithm">algorithm</button>
+          <button class="mini-link" data-step="step6" data-type="python">python</button>
+          <button class="mini-link" data-step="step6" data-type="code">code</button>
+        </div>
+      </div>
+      <p class="step-note">Close channel using selected method and show final closing/commitment transaction path on Bitcoin.</p>
+      <div id="step6Result"></div>
+      <div class="status" id="step6Status"></div>
+    </section>
+  </main>
+
+  <div class="modal hidden" id="popup" role="dialog" aria-modal="true" aria-labelledby="popupTitle">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3 id="popupTitle"></h3>
+        <div class="modal-actions">
+          <button id="popupCopy" type="button">copy</button>
+          <button id="popupClose" type="button">Close</button>
+        </div>
+      </div>
+      <pre id="popupBody"></pre>
+    </div>
+  </div>
+
+  <script type="module">
+    import { sha256 } from "https://esm.sh/@noble/hashes@1.5.0/sha256";
+    import { ripemd160 } from "https://esm.sh/@noble/hashes@1.5.0/ripemd160";
+    import { secp256k1 } from "https://esm.sh/@noble/curves@1.4.2/secp256k1";
+    import { bech32 } from "https://esm.sh/@scure/base@1.1.6";
+
+    const encoder = new TextEncoder();
+    const SAT = 100000000;
+    const N = secp256k1.CURVE.n;
+    const G = secp256k1.ProjectivePoint.BASE;
+
+    const state = {
+      setup: null,
+      channel: null,
+      step4View: null,
+      step5View: null,
+      step6View: null
+    };
+
+    const snippets = {
+      step1: {
+        algorithm: `Step 1: Peer Setup Keys/Basepoints
+
+for each peer (Alice, Bob):
+  generate node keypair
+  generate funding keypair
+  generate basepoint keypairs:
+    payment_basepoint
+    delayed_payment_basepoint
+    revocation_basepoint
+    htlc_basepoint
+  generate first_per_commitment_secret/point
+  generate a P2WPKH address from node pubkey`,
+        python: `# Step 1 (simplified)
+from os import urandom
+from hashlib import sha256
+
+# Generate private keys, derive compressed secp256k1 pubkeys,
+# then derive witness program HASH160(pubkey) for P2WPKH address.
+# In LN, funding pubkeys + basepoints are exchanged in open/accept flow.`,
+        code: `// Lightning / Core references:
+// - BOLT #2 open_channel / accept_channel fields include basepoints
+// - BOLT #3 key derivation uses per-commitment point + basepoints
+// - Bitcoin key and script primitives in Bitcoin Core script/crypto code.`
+      },
+      step2: {
+        algorithm: `Step 2: Open Channel (2 BTC total)
+
+Alice -> Bob: open_channel
+Bob -> Alice: accept_channel
+Alice builds funding tx (2-of-2 P2WSH output, 2 BTC)
+Alice -> Bob: funding_created(funding_txid, sig_for_bob_commit)
+Bob -> Alice: funding_signed(sig_for_alice_commit)
+after confirmations:
+  Alice <-> Bob: channel_ready
+
+Initial state0 commitments are active.`,
+        python: `# Step 2 (concept)
+# Build 2-of-2 funding redeemscript:
+#   2 <alice_funding_pubkey> <bob_funding_pubkey> 2 CHECKMULTISIG
+# scriptPubKey = OP_0 <SHA256(redeemscript)>  # P2WSH
+# Then create initial commitments for state0 balances.`,
+        code: `// BOLT #2 opening flow messages:
+// open_channel, accept_channel, funding_created, funding_signed, channel_ready
+// BOLT #3 commitment tx formats and key derivation rules.`
+      },
+      step3: {
+        algorithm: `Step 3: Alice Pays Bob 0.2 BTC
+
+state0 balances: A=1.0 BTC, B=1.0 BTC
+new state1 balances: A=0.8 BTC, B=1.2 BTC
+
+commitment update handshake:
+  payer side sends commitment_signed
+  receiver sends revoke_and_ack (reveals old secret)
+  receiver sends commitment_signed
+  payer sends revoke_and_ack
+
+state0 is revoked; state1 becomes latest.`,
+        python: `# Step 3 (concept)
+# balances['Alice'] -= 0.2 BTC
+# balances['Bob']   += 0.2 BTC
+# derive new per-commitment point
+# derive new to_local/to_remote keys and scripts
+# exchange commitment_signed + revoke_and_ack`,
+        code: `// BOLT #2 state update handshake:
+// commitment_signed / revoke_and_ack sequencing
+// BOLT #3 revocation and to_local delayed output semantics.`
+      },
+      step4: {
+        algorithm: `Step 4: Action Branch
+
+Option i: regular update (Alice pays Bob 0.1)
+  -> new state + revoke previous
+
+Option ii/iii: force close by one side
+  -> latest local commitment tx broadcast
+
+Option iv/v: cheat by broadcasting revoked state
+  -> honest peer uses revocation path (justice tx)
+  -> cheater's to_local output is punishable.`,
+        python: `# Step 4 (concept)
+# if action == update:
+#   apply payment, derive next commitments, revoke prior
+# elif action == force_close:
+#   broadcast latest commitment tx
+# elif action == cheat:
+#   broadcast revoked commitment; honest side sweeps via revocation key`,
+        code: `// BOLT #5 on-chain handling + BOLT #3 scripts:
+// - force close spends funding outpoint with local commitment tx
+// - breach remedy uses revocation clause in to_local script.`
+      },
+      step5: {
+        algorithm: `Step 5: Bob Pays Alice 0.5 BTC
+
+if channel open:
+  update balances and create next state
+  exchange commitment_signed / revoke_and_ack
+  previous latest becomes revoked
+else:
+  cannot update a closed channel.`,
+        python: `# Step 5 (concept)
+# require channel.status == 'open'
+# balances['Bob'] -= 0.5 BTC
+# balances['Alice'] += 0.5 BTC
+# derive next commitments + revocations`,
+        code: `// Same LN update machinery as Step 3 (BOLT #2/#3).
+// After close, channel has no off-chain update path.`
+      },
+      step6: {
+        algorithm: `Step 6: Close Channel
+
+Option i cooperative close:
+  both agree, build closing tx from funding output
+
+Option ii/iii force close:
+  selected side broadcasts latest commitment tx
+
+show resulting on-chain transaction details.`,
+        python: `# Step 6 (concept)
+# if cooperative:
+#   close_tx outputs final balances to Alice/Bob addresses
+# else:
+#   latest commitment tx is broadcast by selected side`,
+        code: `// BOLT #2 shutdown/closing_signed (cooperative)
+// BOLT #5 unilateral close handling.
+// Closing/commitment tx are standard Bitcoin transactions.`
+      }
+    };
+
+    const runStep1Btn = document.getElementById("runStep1");
+    const runStep2Btn = document.getElementById("runStep2");
+    const runStep3Btn = document.getElementById("runStep3");
+    const runStep4Btn = document.getElementById("runStep4");
+    const runStep5Btn = document.getElementById("runStep5");
+    const runStep6Btn = document.getElementById("runStep6");
+
+    const step1Result = document.getElementById("step1Result");
+    const step2Result = document.getElementById("step2Result");
+    const step3Result = document.getElementById("step3Result");
+    const step4Result = document.getElementById("step4Result");
+    const step5Result = document.getElementById("step5Result");
+    const step6Result = document.getElementById("step6Result");
+
+    const step1Status = document.getElementById("step1Status");
+    const step2Status = document.getElementById("step2Status");
+    const step3Status = document.getElementById("step3Status");
+    const step4Status = document.getElementById("step4Status");
+    const step5Status = document.getElementById("step5Status");
+    const step6Status = document.getElementById("step6Status");
+
+    const step4Action = document.getElementById("step4Action");
+    const step6Action = document.getElementById("step6Action");
+
+    const popup = document.getElementById("popup");
+    const popupTitle = document.getElementById("popupTitle");
+    const popupBody = document.getElementById("popupBody");
+    const popupCopy = document.getElementById("popupCopy");
+    const popupClose = document.getElementById("popupClose");
+
+    let popupText = "";
+
+    function setStatus(el, text, ok = false) {
+      el.textContent = text;
+      el.classList.toggle("ok", ok);
+    }
+
+    function toHex(bytes) {
+      return Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("");
+    }
+
+    function concatBytes(...parts) {
+      const total = parts.reduce((n, p) => n + p.length, 0);
+      const out = new Uint8Array(total);
+      let offset = 0;
+      for (const p of parts) {
+        out.set(p, offset);
+        offset += p.length;
+      }
+      return out;
+    }
+
+    function reverseBytes(bytes) {
+      return Uint8Array.from(bytes).reverse();
+    }
+
+    function hexToBytes(hex) {
+      if (hex.length % 2 !== 0) throw new Error("invalid hex length");
+      const out = new Uint8Array(hex.length / 2);
+      for (let i = 0; i < out.length; i += 1) {
+        out[i] = Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+      }
+      return out;
+    }
+
+    function randomBytes(size) {
+      const out = new Uint8Array(size);
+      crypto.getRandomValues(out);
+      return out;
+    }
+
+    function bytesToBigInt(bytes) {
+      return BigInt(`0x${toHex(bytes)}`);
+    }
+
+    function modN(x) {
+      let v = x % N;
+      if (v < 0n) v += N;
+      if (v === 0n) v = 1n;
+      return v;
+    }
+
+    function bigIntTo32Bytes(n) {
+      let x = n;
+      const out = new Uint8Array(32);
+      for (let i = 31; i >= 0; i -= 1) {
+        out[i] = Number(x & 0xffn);
+        x >>= 8n;
+      }
+      return out;
+    }
+
+    function sha(bytes) {
+      return sha256(bytes);
+    }
+
+    function hash160(bytes) {
+      return ripemd160(sha(bytes));
+    }
+
+    function randomPrivKey() {
+      const raw = secp256k1.utils.randomPrivateKey();
+      const n = modN(bytesToBigInt(raw));
+      return bigIntTo32Bytes(n);
+    }
+
+    function pubFromPriv(priv) {
+      return secp256k1.getPublicKey(priv, true);
+    }
+
+    function pointFromPub(pub) {
+      return secp256k1.ProjectivePoint.fromHex(pub);
+    }
+
+    function scalarFromHash(bytes) {
+      return modN(bytesToBigInt(bytes));
+    }
+
+    function deriveSimplePub(basePub, perCommitPoint) {
+      const tweak = scalarFromHash(sha(concatBytes(perCommitPoint, basePub)));
+      const p = pointFromPub(basePub).add(G.multiply(tweak));
+      return p.toRawBytes(true);
+    }
+
+    function deriveRevocationPub(revocationBasePub, perCommitPoint) {
+      const a = scalarFromHash(sha(concatBytes(revocationBasePub, perCommitPoint)));
+      const b = scalarFromHash(sha(concatBytes(perCommitPoint, revocationBasePub)));
+      const p = pointFromPub(revocationBasePub).multiply(a).add(pointFromPub(perCommitPoint).multiply(b));
+      return p.toRawBytes(true);
+    }
+
+    function deriveRevocationPriv(revocationBasePriv, revocationBasePub, perCommitSecret, perCommitPoint) {
+      const a = scalarFromHash(sha(concatBytes(revocationBasePub, perCommitPoint)));
+      const b = scalarFromHash(sha(concatBytes(perCommitPoint, revocationBasePub)));
+      const base = bytesToBigInt(revocationBasePriv);
+      const per = bytesToBigInt(perCommitSecret);
+      const d = modN(base * a + per * b);
+      return {
+        a,
+        b,
+        priv: bigIntTo32Bytes(d)
+      };
+    }
+
+    function bech32P2WPKH(pubkey) {
+      const program = hash160(pubkey);
+      return bech32.encode("bc", [0, ...bech32.toWords(program)]);
+    }
+
+    function bech32P2WSH(program32) {
+      return bech32.encode("bc", [0, ...bech32.toWords(program32)]);
+    }
+
+    function u32le(n) {
+      return new Uint8Array([
+        n & 0xff,
+        (n >>> 8) & 0xff,
+        (n >>> 16) & 0xff,
+        (n >>> 24) & 0xff
+      ]);
+    }
+
+    function u64le(n) {
+      let x = BigInt(n);
+      const out = new Uint8Array(8);
+      for (let i = 0; i < 8; i += 1) {
+        out[i] = Number(x & 0xffn);
+        x >>= 8n;
+      }
+      return out;
+    }
+
+    function encodeVarInt(n) {
+      if (n < 0xfd) return new Uint8Array([n]);
+      if (n <= 0xffff) return concatBytes(new Uint8Array([0xfd]), new Uint8Array([n & 0xff, (n >>> 8) & 0xff]));
+      if (n <= 0xffffffff) return concatBytes(new Uint8Array([0xfe]), u32le(n));
+      return concatBytes(new Uint8Array([0xff]), u64le(n));
+    }
+
+    function hash256(bytes) {
+      return sha(sha(bytes));
+    }
+
+    function txidDisplay(rawHash) {
+      return toHex(reverseBytes(rawHash));
+    }
+
+    function encodeWitness(items) {
+      const parts = [];
+      const fieldNames = [];
+      const fieldHex = [];
+
+      const count = encodeVarInt(items.length);
+      parts.push(count);
+      fieldNames.push("witness_item_count");
+      fieldHex.push(toHex(count));
+
+      items.forEach((item, i) => {
+        const len = encodeVarInt(item.length);
+        parts.push(len, item);
+        fieldNames.push(`witness[${i}].length`);
+        fieldNames.push(`witness[${i}]`);
+        fieldHex.push(toHex(len));
+        fieldHex.push(toHex(item));
+      });
+
+      return {
+        raw: concatBytes(...parts),
+        fieldNames,
+        fieldHex
+      };
+    }
+
+    function pushData(data) {
+      if (data.length >= 0x4c) throw new Error("pushData length too large for demo");
+      return concatBytes(new Uint8Array([data.length]), data);
+    }
+
+    function scriptNumBytes(n) {
+      let x = n;
+      const out = [];
+      while (x > 0) {
+        out.push(x & 0xff);
+        x >>= 8;
+      }
+      if (out.length === 0) out.push(0);
+      if (out[out.length - 1] & 0x80) out.push(0x00);
+      return new Uint8Array(out);
+    }
+
+    function toLocalScript(revocationPub, delayedPub, toSelfDelay) {
+      const detail = toLocalScriptDetail(revocationPub, delayedPub, toSelfDelay);
+      return concatBytes(...detail.parts);
+    }
+
+    function toLocalScriptDetail(revocationPub, delayedPub, toSelfDelay) {
+      const delay = scriptNumBytes(toSelfDelay);
+      const parts = [
+        new Uint8Array([0x63]), // OP_IF
+        pushData(revocationPub),
+        new Uint8Array([0x67]), // OP_ELSE
+        pushData(delay),
+        new Uint8Array([0xb2]), // CSV
+        new Uint8Array([0x75]), // DROP
+        pushData(delayedPub),
+        new Uint8Array([0x68]), // ENDIF
+        new Uint8Array([0xac]) // CHECKSIG
+      ];
+      const fieldNames = [
+        "OP_IF",
+        "revocationpubkey(push33)",
+        "OP_ELSE",
+        "to_self_delay(push_n)",
+        "OP_CHECKSEQUENCEVERIFY",
+        "OP_DROP",
+        "local_delayedpubkey(push33)",
+        "OP_ENDIF",
+        "OP_CHECKSIG"
+      ];
+      return {
+        delay,
+        parts,
+        fieldNames,
+        fieldHex: parts.map(p => toHex(p))
+      };
+    }
+
+    function p2wshScriptPubKey(script) {
+      const program = sha(script);
+      return concatBytes(new Uint8Array([0x00, 0x20]), program);
+    }
+
+    function p2wpkhScriptPubKey(pubkey) {
+      const h = hash160(pubkey);
+      return concatBytes(new Uint8Array([0x00, 0x14]), h);
+    }
+
+    function serializeTx(tx) {
+      const parts = [];
+      const fields = [];
+
+      const version = u32le(tx.version);
+      parts.push(version); fields.push({ label: "version", hex: toHex(version) });
+
+      const vinCount = encodeVarInt(tx.vin.length);
+      parts.push(vinCount); fields.push({ label: "vin_count", hex: toHex(vinCount) });
+
+      tx.vin.forEach((vin, i) => {
+        const prevTxidLE = reverseBytes(vin.prevTxidDisplay);
+        const vout = u32le(vin.vout);
+        const scriptLen = encodeVarInt(vin.scriptSig.length);
+        const seq = u32le(vin.sequence);
+
+        parts.push(prevTxidLE, vout, scriptLen, vin.scriptSig, seq);
+        fields.push({ label: `vin[${i}].prev_txid_le`, hex: toHex(prevTxidLE) });
+        fields.push({ label: `vin[${i}].vout`, hex: toHex(vout) });
+        fields.push({ label: `vin[${i}].script_length`, hex: toHex(scriptLen) });
+        fields.push({ label: `vin[${i}].scriptSig`, hex: toHex(vin.scriptSig) });
+        fields.push({ label: `vin[${i}].sequence`, hex: toHex(seq) });
+      });
+
+      const voutCount = encodeVarInt(tx.vout.length);
+      parts.push(voutCount); fields.push({ label: "vout_count", hex: toHex(voutCount) });
+
+      tx.vout.forEach((vout, i) => {
+        const amount = u64le(vout.amountSat);
+        const scriptLen = encodeVarInt(vout.scriptPubKey.length);
+        parts.push(amount, scriptLen, vout.scriptPubKey);
+        fields.push({ label: `vout[${i}].amount_sat`, hex: toHex(amount) });
+        fields.push({ label: `vout[${i}].script_length`, hex: toHex(scriptLen) });
+        fields.push({ label: `vout[${i}].scriptPubKey`, hex: toHex(vout.scriptPubKey) });
+      });
+
+      const locktime = u32le(tx.locktime);
+      parts.push(locktime); fields.push({ label: "locktime", hex: toHex(locktime) });
+
+      const raw = concatBytes(...parts);
+      const txidRaw = hash256(raw);
+      return {
+        raw,
+        txidRaw,
+        txid: txidDisplay(txidRaw),
+        fields,
+        fieldNames: fields.map(f => f.label),
+        fieldHex: fields.map(f => f.hex)
+      };
+    }
+
+    function serializeSegwitTx(tx, witnessList) {
+      const parts = [];
+      const fields = [];
+
+      const version = u32le(tx.version);
+      const marker = new Uint8Array([0x00]);
+      const flag = new Uint8Array([0x01]);
+      parts.push(version, marker, flag);
+      fields.push({ label: "version", hex: toHex(version) });
+      fields.push({ label: "marker", hex: toHex(marker) });
+      fields.push({ label: "flag", hex: toHex(flag) });
+
+      const vinCount = encodeVarInt(tx.vin.length);
+      parts.push(vinCount);
+      fields.push({ label: "vin_count", hex: toHex(vinCount) });
+
+      tx.vin.forEach((vin, i) => {
+        const prevTxidLE = reverseBytes(vin.prevTxidDisplay);
+        const vout = u32le(vin.vout);
+        const scriptLen = encodeVarInt(vin.scriptSig.length);
+        const seq = u32le(vin.sequence);
+
+        parts.push(prevTxidLE, vout, scriptLen, vin.scriptSig, seq);
+        fields.push({ label: `vin[${i}].prev_txid_le`, hex: toHex(prevTxidLE) });
+        fields.push({ label: `vin[${i}].vout`, hex: toHex(vout) });
+        fields.push({ label: `vin[${i}].script_length`, hex: toHex(scriptLen) });
+        fields.push({ label: `vin[${i}].scriptSig`, hex: toHex(vin.scriptSig) });
+        fields.push({ label: `vin[${i}].sequence`, hex: toHex(seq) });
+      });
+
+      const voutCount = encodeVarInt(tx.vout.length);
+      parts.push(voutCount);
+      fields.push({ label: "vout_count", hex: toHex(voutCount) });
+
+      tx.vout.forEach((vout, i) => {
+        const amount = u64le(vout.amountSat);
+        const scriptLen = encodeVarInt(vout.scriptPubKey.length);
+        parts.push(amount, scriptLen, vout.scriptPubKey);
+        fields.push({ label: `vout[${i}].amount_sat`, hex: toHex(amount) });
+        fields.push({ label: `vout[${i}].script_length`, hex: toHex(scriptLen) });
+        fields.push({ label: `vout[${i}].scriptPubKey`, hex: toHex(vout.scriptPubKey) });
+      });
+
+      witnessList.forEach((w, i) => {
+        parts.push(w.raw);
+        w.fieldNames.forEach((name, j) => {
+          fields.push({ label: `vin[${i}].${name}`, hex: w.fieldHex[j] });
+        });
+      });
+
+      const locktime = u32le(tx.locktime);
+      parts.push(locktime);
+      fields.push({ label: "locktime", hex: toHex(locktime) });
+
+      const raw = concatBytes(...parts);
+      const wtxidRaw = hash256(raw);
+      return {
+        raw,
+        wtxidRaw,
+        wtxid: txidDisplay(wtxidRaw),
+        fieldNames: fields.map(f => f.label),
+        fieldHex: fields.map(f => f.hex)
+      };
+    }
+
+    function joinedNames(names) {
+      return names.join("||");
+    }
+
+    function joinedHex(fields) {
+      return fields.join("'");
+    }
+
+    function makeParty(name) {
+      const nodePriv = randomPrivKey();
+      const nodePub = pubFromPriv(nodePriv);
+
+      const fundingPriv = randomPrivKey();
+      const fundingPub = pubFromPriv(fundingPriv);
+
+      const paymentPriv = randomPrivKey();
+      const paymentPub = pubFromPriv(paymentPriv);
+      const delayedPriv = randomPrivKey();
+      const delayedPub = pubFromPriv(delayedPriv);
+      const revocationPriv = randomPrivKey();
+      const revocationPub = pubFromPriv(revocationPriv);
+      const htlcPriv = randomPrivKey();
+      const htlcPub = pubFromPriv(htlcPriv);
+
+      const perCommitSeed = randomBytes(32);
+      const firstPerSecret = derivePerCommitSecret(perCommitSeed, 0);
+      const firstPerPoint = pubFromPriv(firstPerSecret);
+
+      return {
+        name,
+        nodePriv,
+        nodePub,
+        nodeAddress: bech32P2WPKH(nodePub),
+        fundingPriv,
+        fundingPub,
+        paymentPriv,
+        paymentPub,
+        delayedPriv,
+        delayedPub,
+        revocationPriv,
+        revocationPub,
+        htlcPriv,
+        htlcPub,
+        perCommitSeed,
+        firstPerSecret,
+        firstPerPoint
+      };
+    }
+
+    function derivePerCommitSecret(seed, idx) {
+      const idxBytes = u32le(idx);
+      const h = sha(concatBytes(seed, idxBytes));
+      const n = modN(bytesToBigInt(h));
+      return bigIntTo32Bytes(n);
+    }
+
+    function sideName(p) {
+      return p === "Alice" ? "Bob" : "Alice";
+    }
+
+    function buildFundingArtifacts(setup) {
+      const alice = setup.Alice;
+      const bob = setup.Bob;
+      const fundingRedeemParts = [
+        new Uint8Array([0x52]),
+        pushData(alice.fundingPub),
+        pushData(bob.fundingPub),
+        new Uint8Array([0x52]),
+        new Uint8Array([0xae])
+      ];
+      const fundingRedeemFieldNames = [
+        "OP_2",
+        "alice_funding_pubkey(push33)",
+        "bob_funding_pubkey(push33)",
+        "OP_2",
+        "OP_CHECKMULTISIG"
+      ];
+      const fundingRedeem = concatBytes(...fundingRedeemParts);
+      const fundingProgram = sha(fundingRedeem);
+      const fundingScriptPubKeyParts = [
+        new Uint8Array([0x00]),
+        new Uint8Array([0x20]),
+        fundingProgram
+      ];
+      const fundingScriptPubKeyFieldNames = [
+        "OP_0",
+        "PUSH32",
+        "SHA256(funding_redeemscript)"
+      ];
+      const fundingScriptPubKey = concatBytes(...fundingScriptPubKeyParts);
+      const fundingAddress = bech32P2WSH(fundingProgram);
+
+      const fundingTx = {
+        version: 2,
+        vin: [
+          {
+            prevTxidDisplay: randomBytes(32),
+            vout: 0,
+            scriptSig: randomBytes(73),
+            sequence: 0xffffffff
+          },
+          {
+            prevTxidDisplay: randomBytes(32),
+            vout: 1,
+            scriptSig: randomBytes(73),
+            sequence: 0xffffffff
+          }
+        ],
+        vout: [
+          {
+            amountSat: 2 * SAT,
+            scriptPubKey: fundingScriptPubKey
+          }
+        ],
+        locktime: 0
+      };
+      const s = serializeTx(fundingTx);
+      return {
+        fundingRedeem,
+        fundingRedeemParts,
+        fundingRedeemFieldNames,
+        fundingProgram,
+        fundingScriptPubKey,
+        fundingScriptPubKeyParts,
+        fundingScriptPubKeyFieldNames,
+        fundingAddress,
+        fundingTx: { ...fundingTx, ...s },
+        fundingOutpoint: {
+          txid: s.txid,
+          txidRaw: s.txidRaw,
+          vout: 0
+        }
+      };
+    }
+
+    function buildCommitmentForOwner(owner, channel, balances, stateIndex, perPoint) {
+      const local = channel.parties[owner];
+      const remoteName = sideName(owner);
+      const remote = channel.parties[remoteName];
+
+      const delayedPub = deriveSimplePub(local.delayedPub, perPoint);
+      const remotePub = deriveSimplePub(remote.paymentPub, perPoint);
+      const revocationPub = deriveRevocationPub(remote.revocationPub, perPoint);
+
+      const delay = owner === "Alice" ? channel.toSelfDelayAlice : channel.toSelfDelayBob;
+      const localScriptDetail = toLocalScriptDetail(revocationPub, delayedPub, delay);
+      const localScript = concatBytes(...localScriptDetail.parts);
+      const toLocalSpk = p2wshScriptPubKey(localScript);
+      const toRemoteSpk = p2wpkhScriptPubKey(remotePub);
+
+      const tx = {
+        version: 2,
+        vin: [
+          {
+            prevTxidDisplay: reverseBytes(channel.funding.fundingOutpoint.txidRaw),
+            vout: channel.funding.fundingOutpoint.vout,
+            scriptSig: new Uint8Array(0),
+            sequence: 0xfffffffd
+          }
+        ],
+        vout: [
+          { amountSat: balances[owner], scriptPubKey: toLocalSpk },
+          { amountSat: balances[remoteName], scriptPubKey: toRemoteSpk }
+        ],
+        locktime: 0
+      };
+      const s = serializeTx(tx);
+      return {
+        owner,
+        remote: remoteName,
+        stateIndex,
+        delay,
+        perCommitPoint: perPoint,
+        localDelayedPub: delayedPub,
+        remotePub,
+        revocationPub,
+        toLocalWitnessScript: localScript,
+        toLocalWitnessScriptFieldNames: localScriptDetail.fieldNames,
+        toLocalWitnessScriptFieldHex: localScriptDetail.fieldHex,
+        toLocalScriptPubKey: toLocalSpk,
+        toRemoteScriptPubKey: toRemoteSpk,
+        tx: { ...tx, ...s }
+      };
+    }
+
+    function makeChannelState(channel, idx, balances, reason) {
+      const aliceSec = derivePerCommitSecret(channel.parties.Alice.perCommitSeed, idx);
+      const bobSec = derivePerCommitSecret(channel.parties.Bob.perCommitSeed, idx);
+      const per = {
+        Alice: { secret: aliceSec, point: pubFromPriv(aliceSec) },
+        Bob: { secret: bobSec, point: pubFromPriv(bobSec) }
+      };
+
+      const commitments = {
+        Alice: buildCommitmentForOwner("Alice", channel, balances, idx, per.Alice.point),
+        Bob: buildCommitmentForOwner("Bob", channel, balances, idx, per.Bob.point)
+      };
+
+      return {
+        index: idx,
+        reason,
+        balances,
+        per,
+        commitments
+      };
+    }
+
+    function latestState(channel) {
+      return channel.states[channel.currentStateIndex];
+    }
+
+    function ensureOpenChannel() {
+      if (!state.channel) throw new Error("Run Step 2 first.");
+      if (state.channel.status !== "open") throw new Error("Channel is already closed.");
+    }
+
+    function applyPayment(channel, payer, amountSat, label) {
+      const payee = sideName(payer);
+      const prev = latestState(channel);
+      if (prev.balances[payer] < amountSat) {
+        throw new Error(`${payer} balance is insufficient for payment.`);
+      }
+
+      const nextBalances = {
+        Alice: prev.balances.Alice,
+        Bob: prev.balances.Bob
+      };
+      nextBalances[payer] -= amountSat;
+      nextBalances[payee] += amountSat;
+
+      const newIdx = channel.currentStateIndex + 1;
+      const nextState = makeChannelState(channel, newIdx, nextBalances, label);
+
+      channel.states.push(nextState);
+      channel.revoked.push(prev.index);
+      channel.currentStateIndex = newIdx;
+
+      return {
+        previous: prev,
+        next: nextState,
+        payer,
+        payee,
+        amountSat,
+        protocolFlow: [
+          `${payer} -> ${payee}: commitment_signed (for ${payee} new commitment tx state${newIdx})`,
+          `${payee} -> ${payer}: revoke_and_ack (reveals state${prev.index} per_commitment_secret)`,
+          `${payee} -> ${payer}: commitment_signed (for ${payer} new commitment tx state${newIdx})`,
+          `${payer} -> ${payee}: revoke_and_ack (reveals state${prev.index} per_commitment_secret)`,
+          `state${prev.index} revoked; state${newIdx} is latest`
+        ]
+      };
+    }
+
+    function forceClose(channel, closer) {
+      const st = latestState(channel);
+      const commit = st.commitments[closer];
+      channel.status = "closed";
+      channel.closeInfo = {
+        type: "force-close",
+        closer,
+        stateIndex: st.index,
+        txid: commit.tx.txid,
+        commit
+      };
+      return channel.closeInfo;
+    }
+
+    function cheatBroadcast(channel, cheater) {
+      if (!channel.revoked.length) {
+        throw new Error("No revoked state exists yet; cannot demonstrate outdated-state cheat.");
+      }
+      const cheatStateIdx = channel.revoked[channel.revoked.length - 1];
+      const st = channel.states.find(s => s.index === cheatStateIdx);
+      const honest = sideName(cheater);
+      const commit = st.commitments[cheater];
+      const honestParty = channel.parties[honest];
+      const perCommitSecret = st.per[cheater].secret;
+      const perCommitPoint = st.per[cheater].point;
+      const revDerive = deriveRevocationPriv(
+        honestParty.revocationPriv,
+        honestParty.revocationPub,
+        perCommitSecret,
+        perCommitPoint
+      );
+      const revocationPriv = revDerive.priv;
+      const revocationPub = pubFromPriv(revocationPriv);
+
+      const justice = {
+        version: 2,
+        vin: [
+          {
+            prevTxidDisplay: reverseBytes(commit.tx.txidRaw),
+            vout: 0,
+            scriptSig: new Uint8Array(0),
+            sequence: 0xfffffffd
+          }
+        ],
+        vout: [
+          {
+            amountSat: st.balances[cheater],
+            scriptPubKey: p2wpkhScriptPubKey(channel.parties[honest].nodePub)
+          }
+        ],
+        locktime: 0
+      };
+      const js = serializeTx(justice);
+      const sighashType = new Uint8Array([0x01, 0x00, 0x00, 0x00]); // SIGHASH_ALL (LE)
+      const justiceSighashPreimage = concatBytes(js.raw, commit.toLocalWitnessScript, sighashType);
+      const justiceSighash = hash256(justiceSighashPreimage);
+
+      const sigObj = secp256k1.sign(justiceSighash, revocationPriv, { lowS: true });
+      const sigDer = typeof sigObj.toDERHex === "function"
+        ? hexToBytes(sigObj.toDERHex())
+        : sigObj.toDERRawBytes();
+      const sigPlusType = concatBytes(sigDer, new Uint8Array([0x01]));
+      const witnessItems = [
+        sigPlusType,
+        new Uint8Array([0x01]), // OP_TRUE: choose revocation branch in to_local_witness_script
+        commit.toLocalWitnessScript
+      ];
+      const witness = encodeWitness(witnessItems);
+      const chainRecord = serializeSegwitTx(justice, [witness]);
+
+      channel.status = "closed";
+      channel.closeInfo = {
+        type: "breach-remedy",
+        cheater,
+        honest,
+        revokedStateIndex: cheatStateIdx,
+        revokedCommitTxid: commit.tx.txid,
+        revocationSecret: toHex(st.per[cheater].secret),
+        revocationBaseSecret: toHex(honestParty.revocationPriv),
+        revocationBasepoint: toHex(honestParty.revocationPub),
+        perCommitPoint: toHex(perCommitPoint),
+        revocationTweakA: `H(revocation_basepoint||per_commitment_point) = ${revDerive.a.toString(16)}`,
+        revocationTweakB: `H(per_commitment_point||revocation_basepoint) = ${revDerive.b.toString(16)}`,
+        derivedRevocationPriv: toHex(revocationPriv),
+        derivedRevocationPub: toHex(revocationPub),
+        expectedRevocationPub: toHex(commit.revocationPub),
+        revocationPubMatches: toHex(revocationPub) === toHex(commit.revocationPub),
+        justiceSighashPreimage: toHex(justiceSighashPreimage),
+        justiceSighash: toHex(justiceSighash),
+        justiceSig: toHex(sigPlusType),
+        justiceTxid: js.txid,
+        justiceWtxid: chainRecord.wtxid,
+        justiceWitness: witness,
+        justiceRecord: chainRecord,
+        justice: { ...justice, ...js }
+      };
+      return channel.closeInfo;
+    }
+
+    function cooperativeClose(channel) {
+      const st = latestState(channel);
+      const closeTx = {
+        version: 2,
+        vin: [
+          {
+            prevTxidDisplay: reverseBytes(channel.funding.fundingOutpoint.txidRaw),
+            vout: channel.funding.fundingOutpoint.vout,
+            scriptSig: new Uint8Array(0),
+            sequence: 0xffffffff
+          }
+        ],
+        vout: [
+          {
+            amountSat: st.balances.Alice,
+            scriptPubKey: p2wpkhScriptPubKey(channel.parties.Alice.nodePub)
+          },
+          {
+            amountSat: st.balances.Bob,
+            scriptPubKey: p2wpkhScriptPubKey(channel.parties.Bob.nodePub)
+          }
+        ],
+        locktime: 0
+      };
+      const s = serializeTx(closeTx);
+      const sighashType = new Uint8Array([0x01, 0x00, 0x00, 0x00]); // SIGHASH_ALL (LE)
+      const sighashPreimage = concatBytes(s.raw, channel.funding.fundingRedeem, sighashType);
+      const closeSighash = hash256(sighashPreimage);
+
+      const aliceSigObj = secp256k1.sign(closeSighash, channel.parties.Alice.fundingPriv, { lowS: true });
+      const bobSigObj = secp256k1.sign(closeSighash, channel.parties.Bob.fundingPriv, { lowS: true });
+      const aliceSigDer = typeof aliceSigObj.toDERHex === "function"
+        ? hexToBytes(aliceSigObj.toDERHex())
+        : aliceSigObj.toDERRawBytes();
+      const bobSigDer = typeof bobSigObj.toDERHex === "function"
+        ? hexToBytes(bobSigObj.toDERHex())
+        : bobSigObj.toDERRawBytes();
+      const aliceSigPlusType = concatBytes(aliceSigDer, new Uint8Array([0x01]));
+      const bobSigPlusType = concatBytes(bobSigDer, new Uint8Array([0x01]));
+
+      const witnessItems = [
+        new Uint8Array(0), // CHECKMULTISIG bug dummy
+        aliceSigPlusType,
+        bobSigPlusType,
+        channel.funding.fundingRedeem
+      ];
+      const witness = encodeWitness(witnessItems);
+      const chainRecord = serializeSegwitTx(closeTx, [witness]);
+
+      channel.status = "closed";
+      channel.closeInfo = {
+        type: "cooperative-close",
+        stateIndex: st.index,
+        txid: s.txid,
+        closeSighashPreimage: sighashPreimage,
+        closeSighash,
+        aliceSigPlusType,
+        bobSigPlusType,
+        witness,
+        chainRecord,
+        closeTx: { ...closeTx, ...s }
+      };
+      return channel.closeInfo;
+    }
+
+    function resetAfterStep1() {
+      state.channel = null;
+      state.step4View = null;
+      state.step5View = null;
+      state.step6View = null;
+      step2Result.innerHTML = "";
+      step3Result.innerHTML = "";
+      step4Result.innerHTML = "";
+      step5Result.innerHTML = "";
+      step6Result.innerHTML = "";
+      setStatus(step2Status, "");
+      setStatus(step3Status, "");
+      setStatus(step4Status, "");
+      setStatus(step5Status, "");
+      setStatus(step6Status, "");
+    }
+
+    function renderKeyTable(party) {
+      const rows = [
+        ["node_privkey", toHex(party.nodePriv), "Identity key for peer authentication and gossip/messages."],
+        ["node_pubkey", toHex(party.nodePub), "Public identity advertised in the Lightning network."],
+        ["node_address_p2wpkh", party.nodeAddress, "Example on-chain wallet address for this peer."],
+        ["funding_privkey", toHex(party.fundingPriv), "Signs the 2-of-2 funding output spends (commit/close tx)."],
+        ["funding_pubkey", toHex(party.fundingPub), "Inserted into 2-of-2 funding redeemscript."],
+        ["payment_basepoint_secret", toHex(party.paymentPriv), "Base secret for deriving to_remote keys in commitments."],
+        ["payment_basepoint", toHex(party.paymentPub), "Exchanged in open/accept; used with per-commitment point."],
+        ["delayed_payment_basepoint_secret", toHex(party.delayedPriv), "Base secret for local delayed output key derivation."],
+        ["delayed_payment_basepoint", toHex(party.delayedPub), "Used in to_local delayed output path."],
+        ["revocation_basepoint_secret", toHex(party.revocationPriv), "Base secret used to build revocation keys."],
+        ["revocation_basepoint", toHex(party.revocationPub), "Lets counterparty punish revoked-state broadcasts."],
+        ["htlc_basepoint_secret", toHex(party.htlcPriv), "Base secret for HTLC output keys (not expanded in this demo)."],
+        ["htlc_basepoint", toHex(party.htlcPub), "HTLC basepoint exchanged during channel opening."],
+        ["first_per_commitment_secret", toHex(party.firstPerSecret), "Per-state secret for state0 key derivation/revocation chain."],
+        ["first_per_commitment_point", toHex(party.firstPerPoint), "Per-state public point mixed with basepoints for commitment keys."]
+      ];
+      const body = rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td></tr>`).join("");
+      return `
+        <div class="result">
+          <h4>${party.name} Key Material</h4>
+          <table>
+            <thead><tr><th>field</th><th>value</th><th>used for</th></tr></thead>
+            <tbody>${body}</tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    function renderCommitmentDetails(commit) {
+      const c = commit;
+      const lines = [
+        `owner = ${c.owner}`,
+        `state_index = ${c.stateIndex}`,
+        `per_commitment_point = ${toHex(c.perCommitPoint)}`,
+        `local_delayedpubkey = ${toHex(c.localDelayedPub)}`,
+        `remote_pubkey = ${toHex(c.remotePub)}`,
+        `revocation_pubkey = ${toHex(c.revocationPub)}`,
+        `to_local_witness_script_fields = ${joinedNames(c.toLocalWitnessScriptFieldNames)}`,
+        `to_local_witness_script_values = ${joinedHex(c.toLocalWitnessScriptFieldHex)}`,
+        `to_local_witness_script = ${toHex(c.toLocalWitnessScript)}`,
+        `to_local_scriptPubKey(P2WSH) = ${toHex(c.toLocalScriptPubKey)}`,
+        `to_remote_scriptPubKey(P2WPKH) = ${toHex(c.toRemoteScriptPubKey)}`,
+        `commitment_tx_fields = ${joinedNames(c.tx.fieldNames)}`,
+        `commitment_tx_bytes = ${joinedHex(c.tx.fieldHex)}`,
+        `commitment_txid = ${c.tx.txid}`
+      ].join("\n");
+      return `
+        <details>
+          <summary>${c.owner} local commitment tx details (state${c.stateIndex})</summary>
+          <pre class="mono">${lines}</pre>
+        </details>
+      `;
+    }
+
+    function renderStep1() {
+      const alice = state.setup.Alice;
+      const bob = state.setup.Bob;
+      step1Result.innerHTML = `
+        ${renderKeyTable(alice)}
+        ${renderKeyTable(bob)}
+      `;
+    }
+
+    function renderStep2() {
+      const ch = state.channel;
+      const st0 = ch.states[0];
+
+      const flow = ch.openFlow.map((m, i) => `${i + 1}. ${m}`).join("\n");
+
+      const fundingLines = [
+        `funding_redeemscript_fields = ${joinedNames(ch.funding.fundingRedeemFieldNames)}`,
+        `funding_redeemscript_values = ${joinedHex(ch.funding.fundingRedeemParts.map(p => toHex(p)))}`,
+        `funding_redeemscript(2-of-2) = ${toHex(ch.funding.fundingRedeem)}`,
+        `funding_witness_program = SHA256(redeemscript) = ${toHex(ch.funding.fundingProgram)}`,
+        `funding_scriptPubKey_fields = ${joinedNames(ch.funding.fundingScriptPubKeyFieldNames)}`,
+        `funding_scriptPubKey_values = ${joinedHex(ch.funding.fundingScriptPubKeyParts.map(p => toHex(p)))}`,
+        `funding_scriptPubKey = ${toHex(ch.funding.fundingScriptPubKey)}`,
+        `funding_scriptPubKey_explain = P2WSH locking script: OP_0 PUSH32 SHA256(funding_redeemscript). Spending requires witness that satisfies the 2-of-2 redeemscript.`,
+        `funding_address = ${ch.funding.fundingAddress}`,
+        `funding_tx_fields = ${joinedNames(ch.funding.fundingTx.fieldNames)}`,
+        `funding_tx_bytes = ${joinedHex(ch.funding.fundingTx.fieldHex)}`,
+        `funding_txid = ${ch.funding.fundingTx.txid}`,
+        `funding_outpoint = ${ch.funding.fundingTx.txid}:0`
+      ].join("\n");
+
+      const balanceLines = [
+        `state0 balances:`,
+        `Alice = ${st0.balances.Alice} sat (${(st0.balances.Alice / SAT).toFixed(8)} BTC)`,
+        `Bob   = ${st0.balances.Bob} sat (${(st0.balances.Bob / SAT).toFixed(8)} BTC)`
+      ].join("\n");
+
+      step2Result.innerHTML = `
+        <div class="result">
+          <h4>BOLT-like Channel Opening Protocol Flow</h4>
+          <pre class="mono">${flow}</pre>
+        </div>
+        <div class="result">
+          <h4>Funding Transaction and Funding Output</h4>
+          <pre class="mono">${fundingLines}</pre>
+          <p class="result-note">Channel capacity is exactly 2 BTC. Demo assumes zero funding miner-fee for clarity.</p>
+        </div>
+        <div class="result">
+          <h4>Initial Channel State (state0)</h4>
+          <pre class="mono">${balanceLines}</pre>
+          ${renderCommitmentDetails(st0.commitments.Alice)}
+          ${renderCommitmentDetails(st0.commitments.Bob)}
+        </div>
+      `;
+    }
+
+    function renderStep3() {
+      const v = state.step5View || state.step4View || state.step3View;
+      const step = state.step3View;
+      if (!step) return;
+
+      const payLines = [
+        `payment = Alice -> Bob : 0.2 BTC (${step.amountSat} sat)`,
+        `old_state = state${step.previous.index}`,
+        `new_state = state${step.next.index}`,
+        `old_balances: Alice=${step.previous.balances.Alice}, Bob=${step.previous.balances.Bob}`,
+        `new_balances: Alice=${step.next.balances.Alice}, Bob=${step.next.balances.Bob}`,
+        `revoked_state_added = state${step.previous.index}`
+      ].join("\n");
+
+      const revLines = [
+        `revealed_per_commitment_secret_for_revoked_state${step.previous.index}:`,
+        `Alice_secret = ${toHex(step.previous.per.Alice.secret)}`,
+        `Bob_secret = ${toHex(step.previous.per.Bob.secret)}`,
+        `revocation means broadcasting state${step.previous.index} is punishable.`
+      ].join("\n");
+
+      const flow = step.protocolFlow.map((m, i) => `${i + 1}. ${m}`).join("\n");
+
+      step3Result.innerHTML = `
+        <div class="result">
+          <h4>State Update Details</h4>
+          <pre class="mono">${payLines}</pre>
+        </div>
+        <div class="result">
+          <h4>commitment_signed / revoke_and_ack Flow</h4>
+          <pre class="mono">${flow}</pre>
+          <pre class="mono">${revLines}</pre>
+        </div>
+        <div class="result">
+          <h4>New Commitment Transactions (state${step.next.index})</h4>
+          ${renderCommitmentDetails(step.next.commitments.Alice)}
+          ${renderCommitmentDetails(step.next.commitments.Bob)}
+        </div>
+      `;
+    }
+
+    function renderStep4() {
+      if (!state.step4View) return;
+      const v = state.step4View;
+      if (v.type === "update") {
+        const flow = v.protocolFlow.map((m, i) => `${i + 1}. ${m}`).join("\n");
+        step4Result.innerHTML = `
+          <div class="result">
+            <h4>Step 4 Result: Regular Update</h4>
+            <pre class="mono">action = Alice pays Bob 0.1 BTC\nold_state = state${v.previous.index}\nnew_state = state${v.next.index}\nnew_balances: Alice=${v.next.balances.Alice}, Bob=${v.next.balances.Bob}</pre>
+            <pre class="mono">${flow}</pre>
+            ${renderCommitmentDetails(v.next.commitments.Alice)}
+            ${renderCommitmentDetails(v.next.commitments.Bob)}
+          </div>
+        `;
+        return;
+      }
+
+      if (v.type === "force-close") {
+        step4Result.innerHTML = `
+          <div class="result">
+            <h4>Step 4 Result: Force Close</h4>
+            <pre class="mono">closer = ${v.closer}\nclosing_state = state${v.stateIndex}\nbroadcast_txid = ${v.txid}\npath = latest local commitment tx spends funding outpoint</pre>
+            <p class="result-note">Force close puts the latest commitment on-chain, applies delay/revocation rules, and ends instant off-chain updates.</p>
+            ${renderCommitmentDetails(v.commit)}
+          </div>
+        `;
+        return;
+      }
+
+      if (v.type === "breach-remedy") {
+        const justice = v.justice;
+        const lines = [
+          `cheater = ${v.cheater}`,
+          `honest_peer = ${v.honest}`,
+          `broadcasted_revoked_state = state${v.revokedStateIndex}`,
+          `revoked_commitment_txid = ${v.revokedCommitTxid}`,
+          `known_revocation_secret(revealed in revoke_and_ack) = ${v.revocationSecret}`,
+          `revocation_base_secret(${v.honest}) = ${v.revocationBaseSecret}`,
+          `revocation_basepoint(${v.honest}) = ${v.revocationBasepoint}`,
+          `per_commitment_point(revoked_state) = ${v.perCommitPoint}`,
+          `tweak_a = ${v.revocationTweakA}`,
+          `tweak_b = ${v.revocationTweakB}`,
+          `derived_revocation_priv = (revocation_base_secret*tweak_a + per_commitment_secret*tweak_b) mod n = ${v.derivedRevocationPriv}`,
+          `derived_revocation_pub = ${v.derivedRevocationPub}`,
+          `expected_revocation_pub(from revoked to_local script) = ${v.expectedRevocationPub}`,
+          `pubkey_match = ${v.revocationPubMatches}`,
+          `justice_sighash_preimage = tx_without_witness||to_local_witness_script||sighash_type(01000000) = ${v.justiceSighashPreimage}`,
+          `justice_sighash = HASH256(preimage) = ${v.justiceSighash}`,
+          `justice_signature(DER+SIGHASH_ALL) = ${v.justiceSig}`,
+          `justice_witness_fields = ${joinedNames(v.justiceWitness.fieldNames)}`,
+          `justice_witness_values = ${joinedHex(v.justiceWitness.fieldHex)}`,
+          `justice_record_fields = ${joinedNames(v.justiceRecord.fieldNames)}`,
+          `justice_record_values = ${joinedHex(v.justiceRecord.fieldHex)}`,
+          `justice_tx_fields = ${joinedNames(justice.fieldNames)}`,
+          `justice_tx_bytes = ${joinedHex(justice.fieldHex)}`,
+          `justice_txid = ${v.justiceTxid}`,
+          `justice_wtxid = ${v.justiceWtxid}`
+        ].join("\n");
+        step4Result.innerHTML = `
+          <div class="result">
+            <h4>Step 4 Result: Cheating Attempt and Penalty</h4>
+            <pre class="mono">${lines}</pre>
+            <p class="result-note">Because the state is revoked, honest peer can claim cheater's to_local output via revocation branch (justice transaction).</p>
+          </div>
+        `;
+      }
+    }
+
+    function renderStep5() {
+      if (!state.step5View) return;
+      if (state.step5View.type === "blocked") {
+        step5Result.innerHTML = `
+          <div class="result">
+            <h4>Step 5 Result</h4>
+            <pre class="mono">${state.step5View.reason}</pre>
+          </div>
+        `;
+        return;
+      }
+
+      const s = state.step5View;
+      const flow = s.protocolFlow.map((m, i) => `${i + 1}. ${m}`).join("\n");
+      step5Result.innerHTML = `
+        <div class="result">
+          <h4>State Update: Bob Pays Alice 0.5 BTC</h4>
+          <pre class="mono">old_state = state${s.previous.index}\nnew_state = state${s.next.index}\namount = ${s.amountSat} sat (0.5 BTC)\nnew_balances: Alice=${s.next.balances.Alice}, Bob=${s.next.balances.Bob}</pre>
+          <pre class="mono">${flow}</pre>
+          ${renderCommitmentDetails(s.next.commitments.Alice)}
+          ${renderCommitmentDetails(s.next.commitments.Bob)}
+        </div>
+      `;
+    }
+
+    function renderStep6() {
+      if (!state.step6View) return;
+      const v = state.step6View;
+      if (v.type === "blocked") {
+        step6Result.innerHTML = `
+          <div class="result"><h4>Step 6 Result</h4><pre class="mono">${v.reason}</pre></div>
+        `;
+        return;
+      }
+
+      if (v.type === "cooperative-close") {
+        const tx = v.closeTx;
+        const sigFlow = [
+          `1. Alice computes closing sighash and sends closing_signed(sig_A) to Bob.`,
+          `2. Bob verifies sig_A, signs the same closing sighash, and returns closing_signed(sig_B).`,
+          `3. Final witness is assembled for funding_redeemscript spend: 0 || sig_A || sig_B || funding_redeemscript.`
+        ].join("\n");
+        const lines = [
+          `close_type = cooperative` ,
+          `state_used = state${v.stateIndex}`,
+          `close_sighash_preimage = tx_without_witness||funding_redeemscript||sighash_type(01000000) = ${toHex(v.closeSighashPreimage)}`,
+          `close_sighash = HASH256(preimage) = ${toHex(v.closeSighash)}`,
+          `sig_A(DER+SIGHASH_ALL) = ${toHex(v.aliceSigPlusType)}`,
+          `sig_B(DER+SIGHASH_ALL) = ${toHex(v.bobSigPlusType)}`,
+          `witness_item_explain = 4 items are required for P2WSH 2-of-2 CHECKMULTISIG spend: witness[0]=empty dummy (historical CHECKMULTISIG bug), witness[1]=Alice signature, witness[2]=Bob signature, witness[3]=funding_redeemscript that defines OP_2 <AlicePub> <BobPub> OP_2 OP_CHECKMULTISIG.`,
+          `witness_fields = ${joinedNames(v.witness.fieldNames)}`,
+          `witness_values = ${joinedHex(v.witness.fieldHex)}`,
+          `transaction_record_fields = ${joinedNames(v.chainRecord.fieldNames)}`,
+          `transaction_record_values = ${joinedHex(v.chainRecord.fieldHex)}`,
+          `closing_wtxid = ${v.chainRecord.wtxid}`,
+          `closing_tx_fields = ${joinedNames(tx.fieldNames)}`,
+          `closing_tx_bytes = ${joinedHex(tx.fieldHex)}`,
+          `closing_txid = ${v.txid}`
+        ].join("\n");
+        step6Result.innerHTML = `
+          <div class="result"><h4>Cooperative Closing Transaction</h4><pre class="mono">${sigFlow}</pre><pre class="mono">${lines}</pre></div>
+        `;
+        return;
+      }
+
+      if (v.type === "force-close") {
+        step6Result.innerHTML = `
+          <div class="result"><h4>Unilateral Close via Commitment Transaction</h4><pre class="mono">closer = ${v.closer}\nstate_used = state${v.stateIndex}\ncommitment_txid = ${v.txid}\nchannel_status = closed</pre>${renderCommitmentDetails(v.commit)}</div>
+        `;
+        return;
+      }
+    }
+
+    async function runStep1() {
+      setStatus(step1Status, "Generating Alice/Bob setup data...");
+      const alice = makeParty("Alice");
+      const bob = makeParty("Bob");
+      state.setup = { Alice: alice, Bob: bob };
+      resetAfterStep1();
+      renderStep1();
+      setStatus(step1Status, "Step 1 complete.", true);
+    }
+
+    async function runStep2() {
+      if (!state.setup) {
+        setStatus(step2Status, "Run Step 1 first.");
+        return;
+      }
+      setStatus(step2Status, "Opening channel and building initial commitments...");
+
+      const parties = state.setup;
+      const funding = buildFundingArtifacts({ Alice: parties.Alice, Bob: parties.Bob });
+
+      const channel = {
+        parties,
+        funding,
+        toSelfDelayAlice: 144,
+        toSelfDelayBob: 144,
+        status: "open",
+        closeInfo: null,
+        states: [],
+        revoked: [],
+        currentStateIndex: 0,
+        openFlow: []
+      };
+
+      const tempChannelId = toHex(randomBytes(32));
+      channel.openFlow = [
+        `Alice -> Bob: open_channel(...)\n   does: propose channel parameters/capacity, commit fee-policy limits, and provide Alice funding key + basepoints + first_per_commitment_point.\n   key fields: funding_satoshis=200000000, push_msat=0, funding_pubkey=${toHex(parties.Alice.fundingPub)}, payment_basepoint=${toHex(parties.Alice.paymentPub)}, delayed_payment_basepoint=${toHex(parties.Alice.delayedPub)}, revocation_basepoint=${toHex(parties.Alice.revocationPub)}, htlc_basepoint=${toHex(parties.Alice.htlcPub)}, first_per_commitment_point=${toHex(parties.Alice.firstPerPoint)}, temporary_channel_id=${tempChannelId}`,
+        `Bob -> Alice: accept_channel(...)\n   does: accept negotiated constraints and provide Bob funding key + basepoints + first_per_commitment_point so both sides can derive commitment keys/scripts.\n   key fields: funding_pubkey=${toHex(parties.Bob.fundingPub)}, payment_basepoint=${toHex(parties.Bob.paymentPub)}, delayed_payment_basepoint=${toHex(parties.Bob.delayedPub)}, revocation_basepoint=${toHex(parties.Bob.revocationPub)}, htlc_basepoint=${toHex(parties.Bob.htlcPub)}, first_per_commitment_point=${toHex(parties.Bob.firstPerPoint)}`,
+        `Alice -> Bob: funding_created(...)\n   does: build/sign funding transaction and send funding_outpoint plus Alice signature for Bob's initial commitment transaction.\n   key fields: funding_txid=${funding.fundingTx.txid}, funding_output_index=0, signature=...`,
+        `Bob -> Alice: funding_signed(...)\n   does: verify funding details, sign Alice's initial commitment transaction, and return Bob signature.\n   key fields: signature=...`,
+        `after confirmations: Alice <-> Bob channel_ready(...)\n   does: both wait for required funding depth, exchange next_per_commitment_point, and mark channel ready for normal updates.\n   key fields: next_per_commitment_point=...`
+      ];
+
+      const st0 = makeChannelState(channel, 0, { Alice: SAT, Bob: SAT }, "channel_open");
+      channel.states.push(st0);
+      channel.currentStateIndex = 0;
+
+      state.channel = channel;
+      state.step3View = null;
+      state.step4View = null;
+      state.step5View = null;
+      state.step6View = null;
+      step3Result.innerHTML = "";
+      step4Result.innerHTML = "";
+      step5Result.innerHTML = "";
+      step6Result.innerHTML = "";
+      setStatus(step3Status, "");
+      setStatus(step4Status, "");
+      setStatus(step5Status, "");
+      setStatus(step6Status, "");
+
+      renderStep2();
+      setStatus(step2Status, "Step 2 complete.", true);
+    }
+
+    async function runStep3() {
+      try {
+        ensureOpenChannel();
+      } catch (err) {
+        setStatus(step3Status, err.message);
+        return;
+      }
+
+      setStatus(step3Status, "Applying payment and updating commitment state...");
+      try {
+        const view = applyPayment(state.channel, "Alice", Math.floor(0.2 * SAT), "Alice pays Bob 0.2");
+        state.step3View = view;
+        renderStep3();
+        setStatus(step3Status, "Step 3 complete.", true);
+      } catch (err) {
+        setStatus(step3Status, `Step 3 failed: ${err.message}`);
+      }
+    }
+
+    async function runStep4() {
+      if (!state.channel) {
+        setStatus(step4Status, "Run Step 2 first.");
+        return;
+      }
+      setStatus(step4Status, "Applying selected branch...");
+
+      const action = step4Action.value;
+      try {
+        if (action === "alice_pay_01") {
+          ensureOpenChannel();
+          const view = applyPayment(state.channel, "Alice", Math.floor(0.1 * SAT), "Alice pays Bob 0.1");
+          state.step4View = { ...view, type: "update" };
+          renderStep4();
+          setStatus(step4Status, "Step 4 complete (state update).", true);
+          return;
+        }
+
+        if (action === "alice_force") {
+          ensureOpenChannel();
+          state.step4View = forceClose(state.channel, "Alice");
+          renderStep4();
+          setStatus(step4Status, "Step 4 complete (Alice force close).", true);
+          return;
+        }
+
+        if (action === "bob_force") {
+          ensureOpenChannel();
+          state.step4View = forceClose(state.channel, "Bob");
+          renderStep4();
+          setStatus(step4Status, "Step 4 complete (Bob force close).", true);
+          return;
+        }
+
+        if (action === "alice_cheat") {
+          ensureOpenChannel();
+          state.step4View = cheatBroadcast(state.channel, "Alice");
+          renderStep4();
+          setStatus(step4Status, "Step 4 complete (Alice cheating scenario).", true);
+          return;
+        }
+
+        if (action === "bob_cheat") {
+          ensureOpenChannel();
+          state.step4View = cheatBroadcast(state.channel, "Bob");
+          renderStep4();
+          setStatus(step4Status, "Step 4 complete (Bob cheating scenario).", true);
+          return;
+        }
+      } catch (err) {
+        setStatus(step4Status, `Step 4 failed: ${err.message}`);
+      }
+    }
+
+    async function runStep5() {
+      if (!state.channel) {
+        setStatus(step5Status, "Run Step 2 first.");
+        return;
+      }
+
+      if (state.channel.status !== "open") {
+        state.step5View = { type: "blocked", reason: `Channel is already closed by ${state.channel.closeInfo ? state.channel.closeInfo.type : "unknown"}.` };
+        renderStep5();
+        setStatus(step5Status, "Step 5 blocked (channel closed).");
+        return;
+      }
+
+      setStatus(step5Status, "Applying Bob -> Alice payment update...");
+      try {
+        state.step5View = applyPayment(state.channel, "Bob", Math.floor(0.5 * SAT), "Bob pays Alice 0.5");
+        renderStep5();
+        setStatus(step5Status, "Step 5 complete.", true);
+      } catch (err) {
+        setStatus(step5Status, `Step 5 failed: ${err.message}`);
+      }
+    }
+
+    async function runStep6() {
+      if (!state.channel) {
+        setStatus(step6Status, "Run Step 2 first.");
+        return;
+      }
+
+      if (state.channel.status !== "open") {
+        state.step6View = { type: "blocked", reason: `Channel already closed via ${state.channel.closeInfo ? state.channel.closeInfo.type : "unknown"}.` };
+        renderStep6();
+        setStatus(step6Status, "Step 6 blocked (already closed).");
+        return;
+      }
+
+      setStatus(step6Status, "Closing channel with selected method...");
+      const action = step6Action.value;
+      try {
+        if (action === "coop") {
+          state.step6View = cooperativeClose(state.channel);
+          renderStep6();
+          setStatus(step6Status, "Step 6 complete (cooperative close).", true);
+          return;
+        }
+        if (action === "alice_force") {
+          state.step6View = forceClose(state.channel, "Alice");
+          renderStep6();
+          setStatus(step6Status, "Step 6 complete (Alice force close).", true);
+          return;
+        }
+        if (action === "bob_force") {
+          state.step6View = forceClose(state.channel, "Bob");
+          renderStep6();
+          setStatus(step6Status, "Step 6 complete (Bob force close).", true);
+          return;
+        }
+      } catch (err) {
+        setStatus(step6Status, `Step 6 failed: ${err.message}`);
+      }
+    }
+
+    function openPopup(step, type) {
+      const source = snippets[step] && snippets[step][type];
+      if (!source) return;
+      popupTitle.textContent = `${type} - ${step.replace("step", "Step ")}`;
+      popupBody.textContent = source;
+      popupText = source;
+      popupCopy.textContent = "copy";
+      popup.classList.remove("hidden");
+    }
+
+    function closePopup() {
+      popup.classList.add("hidden");
+    }
+
+    document.querySelectorAll(".mini-link").forEach(btn => {
+      btn.addEventListener("click", () => openPopup(btn.dataset.step, btn.dataset.type));
+    });
+
+    runStep1Btn.addEventListener("click", async () => {
+      runStep1Btn.disabled = true;
+      try {
+        await runStep1();
+      } finally {
+        runStep1Btn.disabled = false;
+      }
+    });
+
+    runStep2Btn.addEventListener("click", async () => {
+      runStep2Btn.disabled = true;
+      try {
+        await runStep2();
+      } finally {
+        runStep2Btn.disabled = false;
+      }
+    });
+
+    runStep3Btn.addEventListener("click", async () => {
+      runStep3Btn.disabled = true;
+      try {
+        await runStep3();
+      } finally {
+        runStep3Btn.disabled = false;
+      }
+    });
+
+    runStep4Btn.addEventListener("click", async () => {
+      runStep4Btn.disabled = true;
+      try {
+        await runStep4();
+      } finally {
+        runStep4Btn.disabled = false;
+      }
+    });
+
+    runStep5Btn.addEventListener("click", async () => {
+      runStep5Btn.disabled = true;
+      try {
+        await runStep5();
+      } finally {
+        runStep5Btn.disabled = false;
+      }
+    });
+
+    runStep6Btn.addEventListener("click", async () => {
+      runStep6Btn.disabled = true;
+      try {
+        await runStep6();
+      } finally {
+        runStep6Btn.disabled = false;
+      }
+    });
+
+    popupClose.addEventListener("click", closePopup);
+    popup.addEventListener("click", event => {
+      if (event.target === popup) closePopup();
+    });
+
+    popupCopy.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(popupText);
+        popupCopy.textContent = "copied";
+      } catch {
+        popupCopy.textContent = "copy failed";
+      }
+    });
+  </script>
+</body>
+</html>

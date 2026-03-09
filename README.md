@@ -11,6 +11,7 @@ This repository contains interactive, static HTML demos for learning Bitcoin int
 - `btc-transactions/`: step-by-step transaction preimage construction, signing, and verification (supports `P2WPKH` and `P2WSH`).
 - `btc-wallet-generation.html`: interactive wallet flow from entropy and mnemonic to PBKDF2 seed, then child and grand-child address derivation.
 - `btc-block-management.html`: interactive block-management flow including random tx creation, Merkle tree, PoW mining, block serialization, and partial Merkle proof verification.
+- `btc-lightning-channel.html`: interactive Lightning channel flow between Alice and Bob, including setup keys/basepoints, channel opening, commitment updates, revocation, force-close/cheat branches, and final closing.
 
 ## Run Locally
 
